@@ -8,9 +8,8 @@ using std::string;
 using std::shared_ptr;
 using glm::mat4;
 
-Node::Node(string name, mat4 localTransform) :
+Node::Node(string name) :
     _name(name),
-    _localTransform(localTransform),
     _depth(0),
     _children() {
 }

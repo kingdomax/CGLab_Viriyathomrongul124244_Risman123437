@@ -8,13 +8,14 @@ using std::shared_ptr;
 class SceneGraph {
     public:
         SceneGraph();
-        shared_ptr<Node> getRoot();
         string getName();
         string printGraph();
+        shared_ptr<Node> getRoot(); // get root node in this scenegraph
+        static SceneGraph& getInstance(); // get singleton instance
+        void setName(string name);
+        void setRoot(shared_ptr<Node> rootNode);
 
     private:
-        shared_ptr<Node> _root;
         string _name;
-        void setRoot(shared_ptr<Node> rootNode);
-        void setName(string name);
+        shared_ptr<Node> _root;
 };

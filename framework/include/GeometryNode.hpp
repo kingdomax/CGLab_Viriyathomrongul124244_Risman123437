@@ -6,7 +6,7 @@ using std::string;
 
 class GeometryNode : public Node {
 	public:
-		GeometryNode(string name, mat4 localTransform);
+		GeometryNode(string name, model geometry);
 		model getGeometry();
 		void setGeometry(model geoModel);
 

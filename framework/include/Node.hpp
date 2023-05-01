@@ -10,7 +10,7 @@ using glm::mat4;
 
 class Node {
     public:
-        Node(string name, mat4 localTransform);
+        Node(string name);
         shared_ptr<Node> getParent();
         void setParent(Node* parentNode);
         shared_ptr<Node> getChild(string childName);

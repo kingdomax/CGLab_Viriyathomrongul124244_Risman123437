@@ -5,7 +5,7 @@ using glm::mat4;
 
 class CameraNode : public Node {
 	public:
-		CameraNode(string name, mat4 localTransform);
+		CameraNode(string name);
 		bool getPerspective();
 		bool getEnabled();
 		void setEnabled(bool isEnable);

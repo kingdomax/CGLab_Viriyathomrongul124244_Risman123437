@@ -1,32 +1,47 @@
 #include "application_solar.hpp"
 #include "window_handler.hpp"
-
 #include "utils.hpp"
 #include "shader_loader.hpp"
 #include "model_loader.hpp"
-
 #include <glbinding/gl/gl.h>
-// use gl definitions from glbinding 
-using namespace gl;
+using namespace gl; // use gl definitions from glbinding 
 
 //dont load gl bindings from glfw
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
-
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/matrix_inverse.hpp>
 #include <glm/gtc/type_ptr.hpp>
-
 #include <iostream>
+#include <memory>
+#include <array>
+#include "SceneGraph.hpp"
+#include "Node.hpp"
+#include "PointLightNode.hpp"
+#include "GeometryNode.hpp"
+using std::make_shared;
+using std::array;
+using glm::translate;
 
 ApplicationSolar::ApplicationSolar(std::string const& resource_path)
- :Application{resource_path}
- ,planet_object{}
- ,m_view_transform{glm::translate(glm::fmat4{}, glm::fvec3{0.0f, 0.0f, 4.0f})}
- ,m_view_projection{utils::calculate_projection_matrix(initial_aspect_ratio)}
+    :Application{resource_path}
+    ,planet_object{}
+    ,m_view_transform{glm::translate(glm::fmat4{}, glm::fvec3{0.0f, 0.0f, 4.0f})}
+    ,m_view_projection{utils::calculate_projection_matrix(initial_aspect_ratio)}
 {
-  initializeGeometry();
-  initializeShaderPrograms();
+    
+    // 4. setup camera here
+    initializeCamera();
+    // 5. implement camera controls with mouse look using the mouse and the keyboard
+    //    - keyCallback() and mouseCallback()
+    // 1. initialize scenegraph's hierarchy object #done
+    // 2. setup model to node's geometry #done
+    initializeSceneGraph();
+    // 3. make universe render every frame and make all node rotate around sun
+    //    - render()
+    
+    initializeGeometry();
+    initializeShaderPrograms();
 }
 
 ApplicationSolar::~ApplicationSolar() {
@@ -35,14 +50,136 @@ ApplicationSolar::~ApplicationSolar() {
   glDeleteVertexArrays(1, &planet_object.vertex_AO);
 }
 
+///////////////////////////// intialisation functions /////////////////////////
+void ApplicationSolar::initializeCamera() {
+    // Add camera node to scenegraph object
+
+    // Setup projection and Setup localtransform
+}
+
+void ApplicationSolar::initializeSceneGraph() {
+    auto distanceBetweenPlanetInX = 5.0f; // distance between each planet in X axis
+    model planetModel = model_loader::obj(m_resource_path + "models/sphere.obj", model::NORMAL);
+
+    // Initialize sceneGraph obj & Attach root node to it
+    auto root = make_shared<Node>("Root");
+    SceneGraph::getInstance().setRoot(root);
+
+    // Add sun node as a child of root nood
+    auto sun = make_shared<PointLightNode>("PointLight");
+    auto sunGeo = make_shared<GeometryNode>("Sun Geometry", planetModel);
+    root->addChild(sun);
+    sun->addChild(sunGeo);
+
+    // Add earth node and its moon under root nood
+    auto earth = make_shared<Node>("Earth Holder");
+    auto earthGeo = make_shared<GeometryNode>("Earth Geometry", planetModel);
+    root->addChild(earth);
+    earth->addChild(earthGeo);
+    earth->setLocalTransform(translate(earth->getWorldTransform(), { distanceBetweenPlanetInX, 0.0f, 0.0f })); // set earth position
+    auto moon = make_shared<Node>("Moon Holder");
+    auto moonGeo = make_shared<GeometryNode>("Moon Geometry", planetModel);
+    earth->addChild(moon);
+    moon->addChild(moonGeo);
+    moon->setLocalTransform(translate(moon->getLocalTransform(), { distanceBetweenPlanetInX, 0.0f, 0.0f })); // set moon position
+
+    // Add remaining 7 planets as children of root nood
+    array<string, 7> planets = { "Mercury", "Venus", "Mars", "jupiter", "Saturn", "Uranus", "Neptune" };
+    for (const auto& each : planets) {
+        auto planet = make_shared<Node>(each + " Holder");
+        auto planetGeo = make_shared<GeometryNode>(each + " Geometry", planetModel);
+        root->addChild(planet);
+        planet->addChild(planetGeo);
+
+        // add gap between each planet
+        distanceBetweenPlanetInX += 5.0f;
+        planet->setLocalTransform(translate(planet->getLocalTransform(), { distanceBetweenPlanetInX, 0.0f, 0.0f }));
+    }
+
+    SceneGraph::getInstance().printGraph();
+}
+
+// load models
+void ApplicationSolar::initializeGeometry() {
+    model planet_model = model_loader::obj(m_resource_path + "models/sphere.obj", model::NORMAL);
+
+    // generate vertex array object
+    glGenVertexArrays(1, &planet_object.vertex_AO);
+    // bind the array for attaching buffers
+    glBindVertexArray(planet_object.vertex_AO);
+
+    // generate generic buffer
+    glGenBuffers(1, &planet_object.vertex_BO);
+    // bind this as an vertex array buffer containing all attributes
+    glBindBuffer(GL_ARRAY_BUFFER, planet_object.vertex_BO);
+    // configure currently bound array buffer
+    glBufferData(GL_ARRAY_BUFFER, sizeof(float) * planet_model.data.size(), planet_model.data.data(), GL_STATIC_DRAW);
+
+    // activate first attribute on gpu
+    glEnableVertexAttribArray(0);
+    // first attribute is 3 floats with no offset & stride
+    glVertexAttribPointer(0, model::POSITION.components, model::POSITION.type, GL_FALSE, planet_model.vertex_bytes, planet_model.offsets[model::POSITION]);
+    // activate second attribute on gpu
+    glEnableVertexAttribArray(1);
+    // second attribute is 3 floats with no offset & stride
+    glVertexAttribPointer(1, model::NORMAL.components, model::NORMAL.type, GL_FALSE, planet_model.vertex_bytes, planet_model.offsets[model::NORMAL]);
+
+    // generate generic buffer
+    glGenBuffers(1, &planet_object.element_BO);
+    // bind this as an vertex array buffer containing all attributes
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, planet_object.element_BO);
+    // configure currently bound array buffer
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, model::INDEX.size * planet_model.indices.size(), planet_model.indices.data(), GL_STATIC_DRAW);
+
+    // store type of primitive to draw
+    planet_object.draw_mode = GL_TRIANGLES;
+    // transfer number of indices to model object 
+    planet_object.num_elements = GLsizei(planet_model.indices.size());
+}
+
+// load shader sources
+void ApplicationSolar::initializeShaderPrograms() {
+    // store shader program objects in container
+    m_shaders.emplace("planet", shader_program{ {{GL_VERTEX_SHADER,m_resource_path + "shaders/simple.vert"},
+                                             {GL_FRAGMENT_SHADER, m_resource_path + "shaders/simple.frag"}} });
+    // request uniform locations for shader program
+    m_shaders.at("planet").u_locs["NormalMatrix"] = -1;
+    m_shaders.at("planet").u_locs["ModelMatrix"] = -1;
+    m_shaders.at("planet").u_locs["ViewMatrix"] = -1;
+    m_shaders.at("planet").u_locs["ProjectionMatrix"] = -1;
+}
+
+void ApplicationSolar::uploadView() {
+    // vertices are transformed in camera space, so camera transform must be inverted
+    glm::fmat4 view_matrix = glm::inverse(m_view_transform);
+    // upload matrix to gpu
+    glUniformMatrix4fv(m_shaders.at("planet").u_locs.at("ViewMatrix"), 1, GL_FALSE, glm::value_ptr(view_matrix));
+}
+
+void ApplicationSolar::uploadProjection() {
+    // upload matrix to gpu
+    glUniformMatrix4fv(m_shaders.at("planet").u_locs.at("ProjectionMatrix"),
+        1, GL_FALSE, glm::value_ptr(m_view_projection));
+}
+
+// update uniform locations (triggered before render())
+void ApplicationSolar::uploadUniforms() {
+    // bind shader to which to upload unforms
+    glUseProgram(m_shaders.at("planet").handle);
+    // upload uniform values to new locations
+    uploadView();
+    uploadProjection();
+}
+
+///////////////////////////// intialisation functions /////////////////////////
 void ApplicationSolar::render() const {
   // bind shader to upload uniforms
   glUseProgram(m_shaders.at("planet").handle);
 
   glm::fmat4 model_matrix = glm::rotate(glm::fmat4{}, float(glfwGetTime()), glm::fvec3{0.0f, 1.0f, 0.0f});
   model_matrix = glm::translate(model_matrix, glm::fvec3{0.0f, 0.0f, -1.0f});
-  glUniformMatrix4fv(m_shaders.at("planet").u_locs.at("ModelMatrix"),
-                     1, GL_FALSE, glm::value_ptr(model_matrix));
+
+  glUniformMatrix4fv(m_shaders.at("planet").u_locs.at("ModelMatrix"), 1, GL_FALSE, glm::value_ptr(model_matrix));
 
   // extra matrix for normal transformation to keep them orthogonal to surface
   glm::fmat4 normal_matrix = glm::inverseTranspose(glm::inverse(m_view_transform) * model_matrix);
@@ -56,80 +193,6 @@ void ApplicationSolar::render() const {
   glDrawElements(planet_object.draw_mode, planet_object.num_elements, model::INDEX.type, NULL);
 }
 
-void ApplicationSolar::uploadView() {
-  // vertices are transformed in camera space, so camera transform must be inverted
-  glm::fmat4 view_matrix = glm::inverse(m_view_transform);
-  // upload matrix to gpu
-  glUniformMatrix4fv(m_shaders.at("planet").u_locs.at("ViewMatrix"),
-                     1, GL_FALSE, glm::value_ptr(view_matrix));
-}
-
-void ApplicationSolar::uploadProjection() {
-  // upload matrix to gpu
-  glUniformMatrix4fv(m_shaders.at("planet").u_locs.at("ProjectionMatrix"),
-                     1, GL_FALSE, glm::value_ptr(m_view_projection));
-}
-
-// update uniform locations
-void ApplicationSolar::uploadUniforms() { 
-  // bind shader to which to upload unforms
-  glUseProgram(m_shaders.at("planet").handle);
-  // upload uniform values to new locations
-  uploadView();
-  uploadProjection();
-}
-
-///////////////////////////// intialisation functions /////////////////////////
-// load shader sources
-void ApplicationSolar::initializeShaderPrograms() {
-  // store shader program objects in container
-  m_shaders.emplace("planet", shader_program{{{GL_VERTEX_SHADER,m_resource_path + "shaders/simple.vert"},
-                                           {GL_FRAGMENT_SHADER, m_resource_path + "shaders/simple.frag"}}});
-  // request uniform locations for shader program
-  m_shaders.at("planet").u_locs["NormalMatrix"] = -1;
-  m_shaders.at("planet").u_locs["ModelMatrix"] = -1;
-  m_shaders.at("planet").u_locs["ViewMatrix"] = -1;
-  m_shaders.at("planet").u_locs["ProjectionMatrix"] = -1;
-}
-
-// load models
-void ApplicationSolar::initializeGeometry() {
-  model planet_model = model_loader::obj(m_resource_path + "models/sphere.obj", model::NORMAL);
-
-  // generate vertex array object
-  glGenVertexArrays(1, &planet_object.vertex_AO);
-  // bind the array for attaching buffers
-  glBindVertexArray(planet_object.vertex_AO);
-
-  // generate generic buffer
-  glGenBuffers(1, &planet_object.vertex_BO);
-  // bind this as an vertex array buffer containing all attributes
-  glBindBuffer(GL_ARRAY_BUFFER, planet_object.vertex_BO);
-  // configure currently bound array buffer
-  glBufferData(GL_ARRAY_BUFFER, sizeof(float) * planet_model.data.size(), planet_model.data.data(), GL_STATIC_DRAW);
-
-  // activate first attribute on gpu
-  glEnableVertexAttribArray(0);
-  // first attribute is 3 floats with no offset & stride
-  glVertexAttribPointer(0, model::POSITION.components, model::POSITION.type, GL_FALSE, planet_model.vertex_bytes, planet_model.offsets[model::POSITION]);
-  // activate second attribute on gpu
-  glEnableVertexAttribArray(1);
-  // second attribute is 3 floats with no offset & stride
-  glVertexAttribPointer(1, model::NORMAL.components, model::NORMAL.type, GL_FALSE, planet_model.vertex_bytes, planet_model.offsets[model::NORMAL]);
-
-   // generate generic buffer
-  glGenBuffers(1, &planet_object.element_BO);
-  // bind this as an vertex array buffer containing all attributes
-  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, planet_object.element_BO);
-  // configure currently bound array buffer
-  glBufferData(GL_ELEMENT_ARRAY_BUFFER, model::INDEX.size * planet_model.indices.size(), planet_model.indices.data(), GL_STATIC_DRAW);
-
-  // store type of primitive to draw
-  planet_object.draw_mode = GL_TRIANGLES;
-  // transfer number of indices to model object 
-  planet_object.num_elements = GLsizei(planet_model.indices.size());
-}
-
 ///////////////////////////// callback functions for window events ////////////
 // handle key input
 void ApplicationSolar::keyCallback(int key, int action, int mods) {
@@ -141,6 +204,8 @@ void ApplicationSolar::keyCallback(int key, int action, int mods) {
     m_view_transform = glm::translate(m_view_transform, glm::fvec3{0.0f, 0.0f, 0.1f});
     uploadView();
   }
+
+  // todo-moch: add 'A' and 'D' keybind
 }
 
 //handle delta mouse movement input
@@ -156,8 +221,7 @@ void ApplicationSolar::resizeCallback(unsigned width, unsigned height) {
   uploadProjection();
 }
 
-
-// exe entry point
+///////////////////////////// exe entry point ////////////
 int main(int argc, char* argv[]) {
   Application::run<ApplicationSolar>(argc, argv, 3, 2);
 }

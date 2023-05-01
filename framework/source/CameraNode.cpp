@@ -3,8 +3,8 @@
 #include <glm/gtc/matrix_transform.hpp>
 using glm::mat4;
 
-CameraNode::CameraNode(string name, mat4 localTransform) :
-    Node(name, localTransform) {
+CameraNode::CameraNode(string name) :
+    Node(name) {
 
 }
 

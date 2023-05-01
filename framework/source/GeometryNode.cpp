@@ -4,8 +4,10 @@
 #include <model.hpp>
 using std::string;
 
-GeometryNode::GeometryNode(string name, mat4 localTransform) : 
-    Node(name, localTransform) {
+GeometryNode::GeometryNode(string name, model geo) : 
+    Node(name),
+    _geometry(geo)
+{
 
 }
 
