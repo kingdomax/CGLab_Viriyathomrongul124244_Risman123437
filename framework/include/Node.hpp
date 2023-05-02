@@ -2,11 +2,13 @@
 #include <list>
 #include <string>
 #include <memory>
+#include <functional>
 #include <glm/gtc/matrix_transform.hpp>
+using glm::mat4;
 using std::list;
 using std::string;
+using std::function;
 using std::shared_ptr;
-using glm::mat4;
 
 class Node {
     public:
@@ -25,6 +27,8 @@ class Node {
         void setWorldTransform(mat4 worldTransform);
         void addChild(shared_ptr<Node> child);
         shared_ptr<Node> removeChild(string childName);
+        void traverse(const function<void(shared_ptr<Node>)>& func);
+        virtual ~Node() = default; // Provide dynamic type information to the compiler, so we can use dynamic_pointer_cast()
 
     private:
         shared_ptr<Node> _parent;

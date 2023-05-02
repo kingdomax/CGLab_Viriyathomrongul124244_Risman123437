@@ -9,6 +9,7 @@ using namespace gl;
 
 #include <map>
 #include <vector>
+#include <glm/gtc/matrix_transform.hpp>
 
 struct pixel_data;
 struct texture_object;
@@ -36,6 +37,9 @@ namespace utils {
 
   // calculate Vert+ FOV projection matrix
   glm::fmat4 calculate_projection_matrix(float aspect);
+
+  // print matrix
+  void print_matrix(glm::mat4& matrix);
 }
 
 #endif

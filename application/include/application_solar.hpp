@@ -4,6 +4,7 @@
 #include "application.hpp"
 #include "model.hpp"
 #include "structs.hpp"
+#include "Timer.hpp"
 
 // gpu representation of model
 class ApplicationSolar : public Application {
@@ -26,6 +27,7 @@ class ApplicationSolar : public Application {
 		void initializeCamera();
 		// initialize scenegraph's hierarchy object
 		void initializeSceneGraph();
+		mutable Timer _timer;
 
 	protected:
 		void initializeShaderPrograms();

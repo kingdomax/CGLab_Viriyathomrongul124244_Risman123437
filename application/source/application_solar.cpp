@@ -19,27 +19,29 @@ using namespace gl; // use gl definitions from glbinding
 #include "Node.hpp"
 #include "PointLightNode.hpp"
 #include "GeometryNode.hpp"
-using std::make_shared;
-using std::array;
+#include "Timer.hpp"
+using glm::fvec3;
+using glm::fmat4;
+using glm::scale;
+using glm::rotate;
 using glm::translate;
+using std::array;
+using std::shared_ptr;
+using std::make_shared;
+using std::dynamic_pointer_cast;
 
 ApplicationSolar::ApplicationSolar(std::string const& resource_path)
     :Application{resource_path}
     ,planet_object{}
-    ,m_view_transform{glm::translate(glm::fmat4{}, glm::fvec3{0.0f, 0.0f, 4.0f})}
+    ,m_view_transform{glm::translate(glm::fmat4{}, glm::fvec3{0.0f, 0.0f, 30.0f})}
     ,m_view_projection{utils::calculate_projection_matrix(initial_aspect_ratio)}
+    , _timer{}
 {
-    
     // 4. setup camera here
     initializeCamera();
     // 5. implement camera controls with mouse look using the mouse and the keyboard
     //    - keyCallback() and mouseCallback()
-    // 1. initialize scenegraph's hierarchy object #done
-    // 2. setup model to node's geometry #done
     initializeSceneGraph();
-    // 3. make universe render every frame and make all node rotate around sun
-    //    - render()
-    
     initializeGeometry();
     initializeShaderPrograms();
 }
@@ -58,7 +60,7 @@ void ApplicationSolar::initializeCamera() {
 }
 
 void ApplicationSolar::initializeSceneGraph() {
-    auto distanceBetweenPlanetInX = 5.0f; // distance between each planet in X axis
+    auto distanceBetweenPlanetInX = 3.0f; // distance between each planet in X axis
     model planetModel = model_loader::obj(m_resource_path + "models/sphere.obj", model::NORMAL);
 
     // Initialize sceneGraph obj & Attach root node to it
@@ -70,32 +72,35 @@ void ApplicationSolar::initializeSceneGraph() {
     auto sunGeo = make_shared<GeometryNode>("Sun Geometry", planetModel);
     root->addChild(sun);
     sun->addChild(sunGeo);
+    sunGeo->setLocalTransform(scale(sunGeo->getLocalTransform(), { 1.5f,1.5f,1.5f })); // make sun bigger size
 
     // Add earth node and its moon under root nood
     auto earth = make_shared<Node>("Earth Holder");
     auto earthGeo = make_shared<GeometryNode>("Earth Geometry", planetModel);
     root->addChild(earth);
     earth->addChild(earthGeo);
-    earth->setLocalTransform(translate(earth->getWorldTransform(), { distanceBetweenPlanetInX, 0.0f, 0.0f })); // set earth position
+    earthGeo->setLocalTransform(translate(earthGeo->getLocalTransform(), { distanceBetweenPlanetInX, 0.0f, 0.0f })); // set earth position
     auto moon = make_shared<Node>("Moon Holder");
     auto moonGeo = make_shared<GeometryNode>("Moon Geometry", planetModel);
     earth->addChild(moon);
     moon->addChild(moonGeo);
-    moon->setLocalTransform(translate(moon->getLocalTransform(), { distanceBetweenPlanetInX, 0.0f, 0.0f })); // set moon position
+    moonGeo->setLocalTransform(scale(moonGeo->getLocalTransform(), { 0.5f,0.5f,0.5f })); // make moon smaller
+    moonGeo->setLocalTransform(translate(moonGeo->getLocalTransform(), { distanceBetweenPlanetInX, 0.0f, 0.0f })); // set moon position
 
     // Add remaining 7 planets as children of root nood
-    array<string, 7> planets = { "Mercury", "Venus", "Mars", "jupiter", "Saturn", "Uranus", "Neptune" };
+    array<string, 7> planets = { "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune" };
     for (const auto& each : planets) {
         auto planet = make_shared<Node>(each + " Holder");
         auto planetGeo = make_shared<GeometryNode>(each + " Geometry", planetModel);
         root->addChild(planet);
         planet->addChild(planetGeo);
 
-        // add gap between each planet
-        distanceBetweenPlanetInX += 5.0f;
-        planet->setLocalTransform(translate(planet->getLocalTransform(), { distanceBetweenPlanetInX, 0.0f, 0.0f }));
+        // set position and gap between each planet
+        distanceBetweenPlanetInX += 3.0f;
+        planetGeo->setLocalTransform(translate(planetGeo->getLocalTransform(), { distanceBetweenPlanetInX, 0.0f, 0.0f }));
     }
 
+    // Print SceneGraph hierarchy to console
     SceneGraph::getInstance().printGraph();
 }
 
@@ -173,24 +178,44 @@ void ApplicationSolar::uploadUniforms() {
 
 ///////////////////////////// intialisation functions /////////////////////////
 void ApplicationSolar::render() const {
-  // bind shader to upload uniforms
-  glUseProgram(m_shaders.at("planet").handle);
+    // bind shader to upload uniforms
+    glUseProgram(m_shaders.at("planet").handle);
 
-  glm::fmat4 model_matrix = glm::rotate(glm::fmat4{}, float(glfwGetTime()), glm::fvec3{0.0f, 1.0f, 0.0f});
-  model_matrix = glm::translate(model_matrix, glm::fvec3{0.0f, 0.0f, -1.0f});
+    auto renderPlanet = [this](shared_ptr<Node> node) {
+        // Render only GeometryNode
+        auto geoNode = dynamic_pointer_cast<GeometryNode>(node);
+        if (!geoNode) { return; }
 
-  glUniformMatrix4fv(m_shaders.at("planet").u_locs.at("ModelMatrix"), 1, GL_FALSE, glm::value_ptr(model_matrix));
+        // Rotate GeometryNode's parent, because rightnow all parent node is in the same position as sun
+        if (geoNode->getName() == "Moon Geometry") { // Except moon holder need to rotate around earth geometry !!
+            auto parent = geoNode->getParent();
+            auto earthGeo = parent->getParent()->getChild("Earth Geometry");
+            parent->setLocalTransform(rotate(earthGeo->getLocalTransform(), float(glfwGetTime()) * 10, fvec3{ 0.0f, 1.0f, 0.0f }));
+        }
+        else if (geoNode->getName() != "Sun Geometry") {
+            auto parent = geoNode->getParent();
+            parent->setLocalTransform(rotate(parent->getLocalTransform(), static_cast<float>(_timer.getElapsedTime()) * 2, fvec3{ 0.0f, 1.0f, 0.0f }));
+        }
 
-  // extra matrix for normal transformation to keep them orthogonal to surface
-  glm::fmat4 normal_matrix = glm::inverseTranspose(glm::inverse(m_view_transform) * model_matrix);
-  glUniformMatrix4fv(m_shaders.at("planet").u_locs.at("NormalMatrix"),
-                     1, GL_FALSE, glm::value_ptr(normal_matrix));
+        // Then the rotation of holder node will affect position of geometry node aswell
+        auto modelTransform = geoNode->getWorldTransform();
+        glUniformMatrix4fv(m_shaders.at("planet").u_locs.at("ModelMatrix"), 1, GL_FALSE, glm::value_ptr(modelTransform));
 
-  // bind the VAO to draw
-  glBindVertexArray(planet_object.vertex_AO);
+        // extra matrix for normal transformation to keep them orthogonal to surface
+        glm::fmat4 normal_matrix = glm::inverseTranspose(glm::inverse(m_view_transform) * modelTransform);
+        glUniformMatrix4fv(m_shaders.at("planet").u_locs.at("NormalMatrix"), 1, GL_FALSE, glm::value_ptr(normal_matrix));
 
-  // draw bound vertex array using bound shader
-  glDrawElements(planet_object.draw_mode, planet_object.num_elements, model::INDEX.type, NULL);
+        // bind the VAO to draw
+        glBindVertexArray(planet_object.vertex_AO);
+
+        // draw bound vertex array using bound shader
+        glDrawElements(planet_object.draw_mode, planet_object.num_elements, model::INDEX.type, NULL);
+    };
+
+    // Traverse each geometry node from root node in SceneGraph
+    auto root = SceneGraph::getInstance().getRoot();
+    renderPlanet(root);
+    root->traverse(renderPlanet);
 }
 
 ///////////////////////////// callback functions for window events ////////////
@@ -221,7 +246,7 @@ void ApplicationSolar::resizeCallback(unsigned width, unsigned height) {
   uploadProjection();
 }
 
-///////////////////////////// exe entry point ////////////
+///////////////////////////// exe entry point /////////////////////////////
 int main(int argc, char* argv[]) {
   Application::run<ApplicationSolar>(argc, argv, 3, 2);
 }

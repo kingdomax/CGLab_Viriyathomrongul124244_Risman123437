@@ -2,11 +2,13 @@
 #include <list>
 #include <string>
 #include <memory>
+#include <functional>
 #include <glm/gtc/matrix_transform.hpp>
+using glm::mat4;
 using std::list;
 using std::string;
 using std::shared_ptr;
-using glm::mat4;
+using std::function;
 
 Node::Node(string name) :
     _name(name),
@@ -22,7 +24,7 @@ string Node::getPath() { return _path; } // Not sure when/how we're going to use
 
 // ------------- Get transform methods -------------
 mat4 Node::getLocalTransform() { return _localTransform; }
-void Node::setLocalTransform(mat4 localTransform) { _localTransform = _localTransform; }
+void Node::setLocalTransform(mat4 localTransform) { _localTransform = localTransform; }
 void Node::setWorldTransform(mat4 worldTransform) { _worldTransform = worldTransform; }
 mat4 Node::getWorldTransform() {
     // Return world coordinate of this node by multiplying own transform with parent's transform
@@ -54,4 +56,12 @@ shared_ptr<Node> Node::removeChild(string childName) {
         }
     }
     return nullptr;
+}
+
+// invoke specfic func for all child's node
+void Node::traverse(const function<void(shared_ptr<Node>)>& func) {
+    for (auto const& child : _children) {
+        func(child);
+        child->traverse(func);
+    }
 }

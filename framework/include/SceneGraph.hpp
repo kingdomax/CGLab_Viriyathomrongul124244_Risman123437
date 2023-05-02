@@ -9,7 +9,7 @@ class SceneGraph {
     public:
         SceneGraph();
         string getName();
-        string printGraph();
+        void printGraph();
         shared_ptr<Node> getRoot(); // get root node in this scenegraph
         static SceneGraph& getInstance(); // get singleton instance
         void setName(string name);
