@@ -62,14 +62,14 @@ void ApplicationSolar::initializeSceneGraph() {
     auto root = make_shared<Node>("Root");
     SceneGraph::getInstance().setRoot(root);
 
-    // Add sun node as a child of root nood
+    // Add sun node as a child of root node
     auto sun = make_shared<PointLightNode>("PointLight");
     auto sunGeo = make_shared<GeometryNode>("Sun Geometry", planetModel);
     root->addChild(sun);
     sun->addChild(sunGeo);
     sunGeo->setLocalTransform(scale(sunGeo->getLocalTransform(), { 3.0f, 3.0f, 3.0f })); // make sun bigger size
 
-    // Add earth node and its moon under root nood
+    // Add earth node and its moon under root node
     auto earth = make_shared<Node>("Earth Holder");
     auto earthGeo = make_shared<GeometryNode>("Earth Geometry", planetModel);
     root->addChild(earth);
@@ -82,7 +82,7 @@ void ApplicationSolar::initializeSceneGraph() {
     moonGeo->setLocalTransform(scale(moonGeo->getLocalTransform(), { 0.5f,0.5f,0.5f })); // make moon smaller
     moonGeo->setLocalTransform(translate(moonGeo->getLocalTransform(), { distanceBetweenPlanetInX, 0.0f, 0.0f })); // set moon position
 
-    // Add remaining 7 planets as children of root nood
+    // Add remaining 7 planets as children of root node
     array<string, 7> planets = { "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune" };
     for (const auto& each : planets) {
         auto planet = make_shared<Node>(each + " Holder");
