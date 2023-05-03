@@ -23,10 +23,11 @@ class ApplicationSolar : public Application {
 		void render() const;
 
 	private:
-		// setup camera node
-		void initializeCamera();
 		// initialize scenegraph's hierarchy object
 		void initializeSceneGraph();
+		// setup camera node
+		void initializeCamera(glm::fmat4 camInitialTransform, glm::fmat4 camInitialProjection);
+		// timer class
 		mutable Timer _timer;
 
 	protected:

@@ -20,6 +20,7 @@ using namespace gl; // use gl definitions from glbinding
 #include "PointLightNode.hpp"
 #include "GeometryNode.hpp"
 #include "Timer.hpp"
+#include "CameraNode.hpp"
 using glm::fvec3;
 using glm::fmat4;
 using glm::scale;
@@ -33,17 +34,15 @@ using std::dynamic_pointer_cast;
 ApplicationSolar::ApplicationSolar(std::string const& resource_path)
     :Application{resource_path}
     ,planet_object{}
-    ,m_view_transform{glm::translate(glm::fmat4{}, glm::fvec3{0.0f, 0.0f, 30.0f})}
+    ,m_view_transform{glm::translate(glm::fmat4{}, glm::fvec3{0.0f, 0.0f, 20.0f})}
     ,m_view_projection{utils::calculate_projection_matrix(initial_aspect_ratio)}
     , _timer{}
 {
-    // 4. setup camera here
-    initializeCamera();
-    // 5. implement camera controls with mouse look using the mouse and the keyboard
-    //    - keyCallback() and mouseCallback()
     initializeSceneGraph();
+    initializeCamera(m_view_transform, m_view_projection);
     initializeGeometry();
     initializeShaderPrograms();
+    SceneGraph::getInstance().printGraph(); // When all initialization are done, print SceneGraph to console
 }
 
 ApplicationSolar::~ApplicationSolar() {
@@ -53,12 +52,7 @@ ApplicationSolar::~ApplicationSolar() {
 }
 
 ///////////////////////////// intialisation functions /////////////////////////
-void ApplicationSolar::initializeCamera() {
-    // Add camera node to scenegraph object
-
-    // Setup projection and Setup localtransform
-}
-
+// Initialize scenegraph's hierarchy object
 void ApplicationSolar::initializeSceneGraph() {
     auto distanceBetweenPlanetInX = 3.0f; // distance between each planet in X axis
     model planetModel = model_loader::obj(m_resource_path + "models/sphere.obj", model::NORMAL);
@@ -72,7 +66,7 @@ void ApplicationSolar::initializeSceneGraph() {
     auto sunGeo = make_shared<GeometryNode>("Sun Geometry", planetModel);
     root->addChild(sun);
     sun->addChild(sunGeo);
-    sunGeo->setLocalTransform(scale(sunGeo->getLocalTransform(), { 1.5f,1.5f,1.5f })); // make sun bigger size
+    sunGeo->setLocalTransform(scale(sunGeo->getLocalTransform(), { 3.0f, 3.0f, 3.0f })); // make sun bigger size
 
     // Add earth node and its moon under root nood
     auto earth = make_shared<Node>("Earth Holder");
@@ -99,9 +93,17 @@ void ApplicationSolar::initializeSceneGraph() {
         distanceBetweenPlanetInX += 3.0f;
         planetGeo->setLocalTransform(translate(planetGeo->getLocalTransform(), { distanceBetweenPlanetInX, 0.0f, 0.0f }));
     }
+}
 
-    // Print SceneGraph hierarchy to console
-    SceneGraph::getInstance().printGraph();
+// Setup camera node
+void ApplicationSolar::initializeCamera(fmat4 camInitialTransform, fmat4 camInitialProjection) {
+    auto camera = make_shared<CameraNode>("Camera");
+    camera->setEnabled(true);
+    camera->setLocalTransform(camInitialTransform);
+    camera->setProjectionMatrix(camInitialProjection);
+    
+    SceneGraph::getInstance().setCamera(camera); // make camera node accessible through SceneGraph object
+    SceneGraph::getInstance().getRoot()->addChild(camera); // add camera node to root node
 }
 
 // load models
@@ -156,15 +158,14 @@ void ApplicationSolar::initializeShaderPrograms() {
 
 void ApplicationSolar::uploadView() {
     // vertices are transformed in camera space, so camera transform must be inverted
-    glm::fmat4 view_matrix = glm::inverse(m_view_transform);
+    glm::fmat4 view_matrix = glm::inverse(SceneGraph::getInstance().getCamera()->getWorldTransform());
     // upload matrix to gpu
     glUniformMatrix4fv(m_shaders.at("planet").u_locs.at("ViewMatrix"), 1, GL_FALSE, glm::value_ptr(view_matrix));
 }
 
 void ApplicationSolar::uploadProjection() {
     // upload matrix to gpu
-    glUniformMatrix4fv(m_shaders.at("planet").u_locs.at("ProjectionMatrix"),
-        1, GL_FALSE, glm::value_ptr(m_view_projection));
+    glUniformMatrix4fv(m_shaders.at("planet").u_locs.at("ProjectionMatrix"), 1, GL_FALSE, glm::value_ptr(SceneGraph::getInstance().getCamera()->getProjectionMatrix()));
 }
 
 // update uniform locations (triggered before render())
@@ -202,7 +203,7 @@ void ApplicationSolar::render() const {
         glUniformMatrix4fv(m_shaders.at("planet").u_locs.at("ModelMatrix"), 1, GL_FALSE, glm::value_ptr(modelTransform));
 
         // extra matrix for normal transformation to keep them orthogonal to surface
-        glm::fmat4 normal_matrix = glm::inverseTranspose(glm::inverse(m_view_transform) * modelTransform);
+        glm::fmat4 normal_matrix = glm::inverseTranspose(glm::inverse(SceneGraph::getInstance().getCamera()->getWorldTransform()) * modelTransform);
         glUniformMatrix4fv(m_shaders.at("planet").u_locs.at("NormalMatrix"), 1, GL_FALSE, glm::value_ptr(normal_matrix));
 
         // bind the VAO to draw
@@ -221,16 +222,22 @@ void ApplicationSolar::render() const {
 ///////////////////////////// callback functions for window events ////////////
 // handle key input
 void ApplicationSolar::keyCallback(int key, int action, int mods) {
-  if (key == GLFW_KEY_W  && (action == GLFW_PRESS || action == GLFW_REPEAT)) {
-    m_view_transform = glm::translate(m_view_transform, glm::fvec3{0.0f, 0.0f, -0.1f});
-    uploadView();
-  }
-  else if (key == GLFW_KEY_S  && (action == GLFW_PRESS || action == GLFW_REPEAT)) {
-    m_view_transform = glm::translate(m_view_transform, glm::fvec3{0.0f, 0.0f, 0.1f});
-    uploadView();
-  }
-
-  // todo-moch: add 'A' and 'D' keybind
+    auto camera = SceneGraph::getInstance().getCamera();
+    auto& cameraTransform = camera->getLocalTransform();
+    
+    if (key == GLFW_KEY_W  && (action == GLFW_PRESS || action == GLFW_REPEAT)) {
+        camera->setLocalTransform(translate(cameraTransform, fvec3{ 0.0f, 0.0f, -0.2f })); 
+        uploadView();
+    } else if (key == GLFW_KEY_S  && (action == GLFW_PRESS || action == GLFW_REPEAT)) {
+        camera->setLocalTransform(translate(cameraTransform, fvec3{ 0.0f, 0.0f, 0.2f }));
+        uploadView();
+    } else if (key == GLFW_KEY_A && (action == GLFW_PRESS || action == GLFW_REPEAT)) {
+        camera->setLocalTransform(translate(cameraTransform, fvec3{ -0.2f, 0.0f, 0.0f })); // move camera position to left
+        uploadView();
+    } else if (key == GLFW_KEY_D && (action == GLFW_PRESS || action == GLFW_REPEAT)) {
+        camera->setLocalTransform(translate(cameraTransform, fvec3{ 0.2f, 0.0f, 0.0f })); // move camera position to right
+        uploadView();
+    }
 }
 
 //handle delta mouse movement input
@@ -241,7 +248,7 @@ void ApplicationSolar::mouseCallback(double pos_x, double pos_y) {
 //handle resizing
 void ApplicationSolar::resizeCallback(unsigned width, unsigned height) {
   // recalculate projection matrix for new aspect ration
-  m_view_projection = utils::calculate_projection_matrix(float(width) / float(height));
+  SceneGraph::getInstance().getCamera()->setProjectionMatrix(utils::calculate_projection_matrix(float(width) / float(height)));
   // upload new projection matrix
   uploadProjection();
 }

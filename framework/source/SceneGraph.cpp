@@ -1,20 +1,29 @@
 #include "Node.hpp"
 #include "SceneGraph.hpp"
+#include "CameraNode.hpp"
 #include <string>
 #include <memory>
 #include <iostream>
 using std::string;
 using std::shared_ptr;
+using std::dynamic_pointer_cast;
 
 SceneGraph::SceneGraph() { }
 
-// Public method
-string SceneGraph::getName() { return _name; }
-shared_ptr<Node> SceneGraph::getRoot() { return _root; }
 SceneGraph& SceneGraph::getInstance() {
     static SceneGraph instance;
     return instance;
 }
+
+string SceneGraph::getName() { return _name; }
+void SceneGraph::setName(string name) { _name = name; }
+
+shared_ptr<Node> SceneGraph::getRoot() { return _root; }
+void SceneGraph::setRoot(shared_ptr<Node> rootNode) { _root = rootNode; }
+
+shared_ptr<CameraNode> SceneGraph::getCamera() { return _camera; }
+void SceneGraph::setCamera(shared_ptr<CameraNode> cameraNode) { _camera = cameraNode; }
+
 void SceneGraph::printGraph() {
     std::cout << "------------ SceneGraph ------------" << std::endl;
     auto printName = [this](shared_ptr<Node> node) {
@@ -25,7 +34,3 @@ void SceneGraph::printGraph() {
     _root->traverse(printName);
     std::cout << "------------------------------------" << std::endl;
 }
-
-// Private method
-void SceneGraph::setName(string name) { _name = name; }
-void SceneGraph::setRoot(shared_ptr<Node> rootNode) { _root = rootNode; }
