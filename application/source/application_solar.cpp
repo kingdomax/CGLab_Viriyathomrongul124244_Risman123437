@@ -22,6 +22,7 @@ using namespace gl; // use gl definitions from glbinding
 #include "Timer.hpp"
 #include "CameraNode.hpp"
 using glm::fvec3;
+using glm::radians;
 using glm::fmat4;
 using glm::scale;
 using glm::rotate;
@@ -54,7 +55,7 @@ ApplicationSolar::~ApplicationSolar() {
 ///////////////////////////// intialisation functions /////////////////////////
 // Initialize scenegraph's hierarchy object
 void ApplicationSolar::initializeSceneGraph() {
-    auto distanceBetweenPlanetInX = 3.0f; // distance between each planet in X axis
+    auto distanceBetweenPlanetInX = 5.0f; // distance between each planet in X axis
     model planetModel = model_loader::obj(m_resource_path + "models/sphere.obj", model::NORMAL);
 
     // Initialize sceneGraph obj & Attach root node to it
@@ -90,7 +91,7 @@ void ApplicationSolar::initializeSceneGraph() {
         planet->addChild(planetGeo);
 
         // set position and gap between each planet
-        distanceBetweenPlanetInX += 3.0f;
+        distanceBetweenPlanetInX += 5.0f;
         planetGeo->setLocalTransform(translate(planetGeo->getLocalTransform(), { distanceBetweenPlanetInX, 0.0f, 0.0f }));
     }
 }
@@ -242,7 +243,15 @@ void ApplicationSolar::keyCallback(int key, int action, int mods) {
 
 //handle delta mouse movement input
 void ApplicationSolar::mouseCallback(double pos_x, double pos_y) {
-  // mouse handling
+    auto camera = SceneGraph::getInstance().getCamera();
+    float mouseSensitivity = 0.1f;
+
+    // Rotate camera in Y axis regarding x coordinate of mouse cursor
+    camera->setLocalTransform(rotate(camera->getLocalTransform(), radians(float(pos_x * mouseSensitivity)), fvec3{ 0.0f, -1.0f, 0.0f }));
+    // Rotate camera in X axis regarding y coordinate of mouse cursor
+    camera->setLocalTransform(rotate(camera->getLocalTransform(), radians(float(pos_y* mouseSensitivity)), fvec3{ -1.0f, 0.0f, 0.0f }));
+
+    uploadView();
 }
 
 //handle resizing
