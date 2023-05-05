@@ -77,7 +77,7 @@ void ApplicationSolar::initializeSceneGraph() {
     earthGeo->setLocalTransform(translate(earthGeo->getLocalTransform(), { distanceBetweenPlanetInX, 0.0f, 0.0f })); // set earth position
     auto moon = make_shared<Node>("Moon Holder");
     auto moonGeo = make_shared<GeometryNode>("Moon Geometry", planetModel);
-    earth->addChild(moon);
+    earthGeo->addChild(moon);
     moon->addChild(moonGeo);
     moonGeo->setLocalTransform(scale(moonGeo->getLocalTransform(), { 0.5f,0.5f,0.5f })); // make moon smaller
     moonGeo->setLocalTransform(translate(moonGeo->getLocalTransform(), { distanceBetweenPlanetInX, 0.0f, 0.0f })); // set moon position
@@ -191,12 +191,13 @@ void ApplicationSolar::render() const {
         // Rotate GeometryNode's parent, because rightnow all parent node is in the same position as sun
         if (geoNode->getName() == "Moon Geometry") { // Except moon holder need to rotate around earth geometry !!
             auto parent = geoNode->getParent();
-            auto earthGeo = parent->getParent()->getChild("Earth Geometry");
-            parent->setLocalTransform(rotate(earthGeo->getLocalTransform(), float(glfwGetTime()) * 10, fvec3{ 0.0f, 1.0f, 0.0f }));
+            //auto earthGeo = parent->getParent()->getChild("Earth Geometry");
+            parent->setLocalTransform(rotate(parent->getLocalTransform(), static_cast<float>(_timer.getElapsedTime() * 50), fvec3{0.0f, 1.0f, 0.0f}));
         }
         else if (geoNode->getName() != "Sun Geometry") {
             auto parent = geoNode->getParent();
-            parent->setLocalTransform(rotate(parent->getLocalTransform(), static_cast<float>(_timer.getElapsedTime()) * 2, fvec3{ 0.0f, 1.0f, 0.0f }));
+            parent->setLocalTransform(rotate(parent->getLocalTransform(), static_cast<float>(_timer.getElapsedTime()), fvec3{ 0.0f, 1.0f, 0.0f }));
+            //geoNode->setLocalTransform(rotate(geoNode->getLocalTransfrom(), speed, Y ))
         }
 
         // Then the rotation of holder node will affect position of geometry node aswell
