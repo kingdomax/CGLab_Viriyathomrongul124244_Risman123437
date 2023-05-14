@@ -4,8 +4,9 @@
 #include <model.hpp>
 using std::string;
 
-GeometryNode::GeometryNode(string name, model geo) : 
+GeometryNode::GeometryNode(string name, string shader, model geo) : 
     Node(name),
+    _shader(shader),
     _geometry(geo)
 {
 
