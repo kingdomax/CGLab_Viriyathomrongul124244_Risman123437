@@ -189,16 +189,8 @@ void ApplicationSolar::render() const {
         if (!geoNode) { return; }
 
         // Rotate GeometryNode's parent, because rightnow all parent node is in the same position as sun
-        if (geoNode->getName() == "Moon Geometry") { // Except moon holder need to rotate around earth geometry !!
-            auto parent = geoNode->getParent();
-            //auto earthGeo = parent->getParent()->getChild("Earth Geometry");
-            parent->setLocalTransform(rotate(parent->getLocalTransform(), static_cast<float>(_timer.getElapsedTime() * 50), fvec3{0.0f, 1.0f, 0.0f}));
-        }
-        else if (geoNode->getName() != "Sun Geometry") {
-            auto parent = geoNode->getParent();
-            parent->setLocalTransform(rotate(parent->getLocalTransform(), static_cast<float>(_timer.getElapsedTime()), fvec3{ 0.0f, 1.0f, 0.0f }));
-            //geoNode->setLocalTransform(rotate(geoNode->getLocalTransfrom(), speed, Y ))
-        }
+        auto parent = geoNode->getParent();
+        parent->setLocalTransform(rotate(parent->getLocalTransform(), static_cast<float>(_timer.getElapsedTime() * 20.0f), fvec3{ 0.0f, 1.0f, 0.0f }));
 
         // Then the rotation of holder node will affect position of geometry node aswell
         auto modelTransform = geoNode->getWorldTransform();
