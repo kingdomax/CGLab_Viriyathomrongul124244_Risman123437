@@ -15,6 +15,7 @@ using namespace gl; // use gl definitions from glbinding
 #include <iostream>
 #include <memory>
 #include <array>
+#include <map>
 #include "SceneGraph.hpp"
 #include "Node.hpp"
 #include "PointLightNode.hpp"
@@ -27,6 +28,7 @@ using glm::fmat4;
 using glm::scale;
 using glm::rotate;
 using glm::translate;
+using std::map;
 using std::array;
 using std::shared_ptr;
 using std::make_shared;
@@ -37,7 +39,8 @@ ApplicationSolar::ApplicationSolar(std::string const& resource_path)
     ,planet_object{}
     ,m_view_transform{glm::translate(glm::fmat4{}, glm::fvec3{0.0f, 0.0f, 20.0f})}
     ,m_view_projection{utils::calculate_projection_matrix(initial_aspect_ratio)}
-    , _timer{}
+    ,_timer{}
+    ,_shaderToUse{{"planetShader", "simple"}, {"starShader", "vao"}, {"orbitShader", "orbit"}}
 {
     initializeSceneGraph();
     initializeCamera(m_view_transform, m_view_projection);
@@ -64,36 +67,55 @@ void ApplicationSolar::initializeSceneGraph() {
 
     // Add sun node as a child of root node
     auto sun = make_shared<PointLightNode>("PointLight");
-    auto sunGeo = make_shared<GeometryNode>("Sun Geometry", "planet", planetModel);
+    auto sunGeo = make_shared<GeometryNode>("Sun Geometry", "planetShader", planetModel);
     root->addChild(sun);
     sun->addChild(sunGeo);
     sunGeo->setLocalTransform(scale(sunGeo->getLocalTransform(), { 3.0f, 3.0f, 3.0f })); // make sun bigger size
 
-    // Add earth node and its moon under root node
+    // todo-moch: refactor earth initialization and moon initialization
+    // Add earth node
     auto earth = make_shared<Node>("Earth Holder");
-    auto earthGeo = make_shared<GeometryNode>("Earth Geometry", "planet", planetModel);
+    auto earthGeo = make_shared<GeometryNode>("Earth Geometry", "planetShader", planetModel);
+    auto earthOrbit = make_shared<GeometryNode>("Earth Orbit", "orbitShader", planetModel);
     root->addChild(earth);
+    //root->addChild(earthOrbit); todo-moch: enable when shader is ready
     earth->addChild(earthGeo);
-    earthGeo->setLocalTransform(translate(earthGeo->getLocalTransform(), { distanceBetweenPlanetInX, 0.0f, 0.0f })); // set earth position
+    earthGeo->setLocalTransform(translate(earthGeo->getLocalTransform(), { distanceBetweenPlanetInX, 0.0f, 0.0f })); // set earth geo's position
+    earthOrbit->setLocalTransform(scale(earthOrbit->getLocalTransform(), { distanceBetweenPlanetInX, distanceBetweenPlanetInX, distanceBetweenPlanetInX })); // set earth orbit's size
+    
+    // Add moon as child of earth geometry
     auto moon = make_shared<Node>("Moon Holder");
-    auto moonGeo = make_shared<GeometryNode>("Moon Geometry", "planet", planetModel);
+    auto moonGeo = make_shared<GeometryNode>("Moon Geometry", "planetShader", planetModel);
+    auto moonOrbit = make_shared<GeometryNode>("Moon Orbit", "orbitShader", planetModel);
     earthGeo->addChild(moon);
+    //earthGeo->addChild(moonOrbit); todo-moch: enable when shader is ready
     moon->addChild(moonGeo);
     moonGeo->setLocalTransform(scale(moonGeo->getLocalTransform(), { 0.5f,0.5f,0.5f })); // make moon smaller
     moonGeo->setLocalTransform(translate(moonGeo->getLocalTransform(), { distanceBetweenPlanetInX, 0.0f, 0.0f })); // set moon position
+    moonOrbit->setLocalTransform(scale(moonOrbit->getLocalTransform(), { distanceBetweenPlanetInX, distanceBetweenPlanetInX, distanceBetweenPlanetInX })); // set moon orbit size
 
     // Add remaining 7 planets as children of root node
     array<string, 7> planets = { "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune" };
     for (const auto& each : planets) {
         auto planet = make_shared<Node>(each + " Holder");
-        auto planetGeo = make_shared<GeometryNode>(each + " Geometry", "planet", planetModel);
+        auto planetGeo = make_shared<GeometryNode>(each + " Geometry", "planetShader", planetModel);
+        auto planetOrbit = make_shared<GeometryNode>(each + " Orbit", "orbitShader", planetModel);
         root->addChild(planet);
+        //root->addChild(planetOrbit); todo-moch: enable when shader is ready
         planet->addChild(planetGeo);
 
         // set position and gap between each planet
         distanceBetweenPlanetInX += 5.0f;
         planetGeo->setLocalTransform(translate(planetGeo->getLocalTransform(), { distanceBetweenPlanetInX, 0.0f, 0.0f }));
+
+        // Orbit geo node will be at the same position as sun, and its scale is big as distance between sun and planet geometry
+        planetOrbit->setLocalTransform(scale(planetOrbit->getLocalTransform(), { distanceBetweenPlanetInX, distanceBetweenPlanetInX, distanceBetweenPlanetInX }));
     }
+
+    // Add star geometry node and scale its size as big as possible
+    auto starGeo = make_shared<GeometryNode>("Star", "starShader", planetModel);
+    starGeo->setLocalTransform(scale(starGeo->getLocalTransform(), { 10.0f, 10.0f, 10.0f }));
+    //root->addChild(starGeo); todo-moch: enable when shader is ready
 }
 
 // Setup camera node
@@ -148,32 +170,38 @@ void ApplicationSolar::initializeGeometry() {
 // load shader sources
 void ApplicationSolar::initializeShaderPrograms() {
     // store shader program objects in container
-    m_shaders.emplace("planet", shader_program{ {{GL_VERTEX_SHADER,m_resource_path + "shaders/simple.vert"},
-                                             {GL_FRAGMENT_SHADER, m_resource_path + "shaders/simple.frag"}} });
-    // request uniform locations for shader program
-    m_shaders.at("planet").u_locs["NormalMatrix"] = -1;
-    m_shaders.at("planet").u_locs["ModelMatrix"] = -1;
-    m_shaders.at("planet").u_locs["ViewMatrix"] = -1;
-    m_shaders.at("planet").u_locs["ProjectionMatrix"] = -1;
+    for (const auto& each : _shaderToUse) {
+        auto& filePath = m_resource_path + "shaders/" + each.second;
+
+        m_shaders.emplace(each.first, shader_program{ {{GL_VERTEX_SHADER,filePath+".vert"}, {GL_FRAGMENT_SHADER,filePath+".frag"}} });
+        m_shaders.at(each.first).u_locs["NormalMatrix"] = -1;
+        m_shaders.at(each.first).u_locs["ModelMatrix"] = -1;
+        m_shaders.at(each.first).u_locs["ViewMatrix"] = -1;
+        m_shaders.at(each.first).u_locs["ProjectionMatrix"] = -1;
+    }
 }
 
 void ApplicationSolar::uploadView() {
     // vertices are transformed in camera space, so camera transform must be inverted
-    glm::fmat4 view_matrix = glm::inverse(SceneGraph::getInstance().getCamera()->getWorldTransform());
+    fmat4 viewMatrix = glm::inverse(SceneGraph::getInstance().getCamera()->getWorldTransform());
     // upload matrix to gpu
-    glUniformMatrix4fv(m_shaders.at("planet").u_locs.at("ViewMatrix"), 1, GL_FALSE, glm::value_ptr(view_matrix));
+    for (auto& const each : _shaderToUse) {
+        glUseProgram(m_shaders.at(each.first).handle);
+        glUniformMatrix4fv(m_shaders.at(each.first).u_locs.at("ViewMatrix"), 1, GL_FALSE, glm::value_ptr(viewMatrix));
+    }
 }
 
 void ApplicationSolar::uploadProjection() {
-    // upload matrix to gpu
-    glUniformMatrix4fv(m_shaders.at("planet").u_locs.at("ProjectionMatrix"), 1, GL_FALSE, glm::value_ptr(SceneGraph::getInstance().getCamera()->getProjectionMatrix()));
+    fmat4 projectionMatrix = SceneGraph::getInstance().getCamera()->getProjectionMatrix();
+    for (auto& const each : _shaderToUse) {
+        glUseProgram(m_shaders.at(each.first).handle);
+        glUniformMatrix4fv(m_shaders.at(each.first).u_locs.at("ProjectionMatrix"), 1, GL_FALSE, glm::value_ptr(projectionMatrix));
+    }
 }
 
 // update uniform locations (triggered before render())
 void ApplicationSolar::uploadUniforms() {
-    // bind shader to which to upload unforms
-    glUseProgram(m_shaders.at("planet").handle);
-    // upload uniform values to new locations
+    // bind shader to which to upload unforms + upload uniform values to new locations
     uploadView();
     uploadProjection();
 }
@@ -181,7 +209,7 @@ void ApplicationSolar::uploadUniforms() {
 ///////////////////////////// intialisation functions /////////////////////////
 void ApplicationSolar::render() const {
     // bind shader to upload uniforms
-    glUseProgram(m_shaders.at("planet").handle);
+    glUseProgram(m_shaders.at("planetShader").handle);
 
     auto renderPlanet = [this](shared_ptr<Node> node) {
         // Render only GeometryNode
@@ -189,16 +217,18 @@ void ApplicationSolar::render() const {
         if (!geoNode) { return; }
 
         // Rotate GeometryNode's parent, because rightnow all parent node is in the same position as sun
-        auto parent = geoNode->getParent();
-        parent->setLocalTransform(rotate(parent->getLocalTransform(), static_cast<float>(_timer.getElapsedTime() * 20.0f), fvec3{ 0.0f, 1.0f, 0.0f }));
+        if (geoNode->getShader() == "planetShader" && geoNode->getName() != "Sun Geometry") {
+            auto parent = geoNode->getParent();
+            parent->setLocalTransform(rotate(parent->getLocalTransform(), static_cast<float>(_timer.getElapsedTime() * 10.0f), fvec3{ 0.0f, 1.0f, 0.0f }));
+        }
 
         // Then the rotation of holder node will affect position of geometry node aswell
         auto modelTransform = geoNode->getWorldTransform();
-        glUniformMatrix4fv(m_shaders.at("planet").u_locs.at("ModelMatrix"), 1, GL_FALSE, glm::value_ptr(modelTransform));
+        glUniformMatrix4fv(m_shaders.at("planetShader").u_locs.at("ModelMatrix"), 1, GL_FALSE, glm::value_ptr(modelTransform));
 
         // extra matrix for normal transformation to keep them orthogonal to surface
         glm::fmat4 normal_matrix = glm::inverseTranspose(glm::inverse(SceneGraph::getInstance().getCamera()->getWorldTransform()) * modelTransform);
-        glUniformMatrix4fv(m_shaders.at("planet").u_locs.at("NormalMatrix"), 1, GL_FALSE, glm::value_ptr(normal_matrix));
+        glUniformMatrix4fv(m_shaders.at("planetShader").u_locs.at("NormalMatrix"), 1, GL_FALSE, glm::value_ptr(normal_matrix));
 
         // bind the VAO to draw
         glBindVertexArray(planet_object.vertex_AO);

@@ -5,6 +5,10 @@
 #include "model.hpp"
 #include "structs.hpp"
 #include "Timer.hpp"
+#include <map>
+#include <string>
+using std::map;
+using std::string;
 
 // gpu representation of model
 class ApplicationSolar : public Application {
@@ -29,6 +33,8 @@ class ApplicationSolar : public Application {
 		void initializeCamera(glm::fmat4 camInitialTransform, glm::fmat4 camInitialProjection);
 		// timer class
 		mutable Timer _timer;
+		// key=shader name, value=file name
+		map<string, string> _shaderToUse;
 
 	protected:
 		void initializeShaderPrograms();

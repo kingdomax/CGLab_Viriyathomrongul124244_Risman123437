@@ -12,5 +12,6 @@ GeometryNode::GeometryNode(string name, string shader, model geo) :
 
 }
 
+string GeometryNode::getShader() { return _shader; }
 model GeometryNode::getGeometry() { return _geometry; }
 void GeometryNode::setGeometry(model geoModel) { _geometry = geoModel; }
