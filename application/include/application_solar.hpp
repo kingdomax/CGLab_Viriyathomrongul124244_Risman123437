@@ -34,7 +34,7 @@ class ApplicationSolar : public Application {
 		// timer class
 		mutable Timer _timer;
 		// key=shader name, value=file name
-		map<string, string> _shaderToUse;
+		map<string, string> _shaderList;
 
 	protected:
 		void initializeShaderPrograms();

@@ -16,6 +16,7 @@ using namespace gl; // use gl definitions from glbinding
 #include <memory>
 #include <array>
 #include <map>
+#include <vector>
 #include "SceneGraph.hpp"
 #include "Node.hpp"
 #include "PointLightNode.hpp"
@@ -30,6 +31,7 @@ using glm::rotate;
 using glm::translate;
 using std::map;
 using std::array;
+using std::vector;
 using std::shared_ptr;
 using std::make_shared;
 using std::dynamic_pointer_cast;
@@ -40,12 +42,13 @@ ApplicationSolar::ApplicationSolar(std::string const& resource_path)
     ,m_view_transform{glm::translate(glm::fmat4{}, glm::fvec3{0.0f, 0.0f, 20.0f})}
     ,m_view_projection{utils::calculate_projection_matrix(initial_aspect_ratio)}
     ,_timer{}
-    ,_shaderToUse{{"planetShader", "simple"}, {"starShader", "vao"}, {"orbitShader", "orbit"}}
+    ,_shaderList{{"planetShader", "simple"}, {"starShader", "vao"}, {"orbitShader", "orbit"}}
 {
-    initializeSceneGraph();
-    initializeCamera(m_view_transform, m_view_projection);
+    // Initialize order is matter
     initializeGeometry();
     initializeShaderPrograms();
+    initializeSceneGraph();
+    initializeCamera(m_view_transform, m_view_projection);
     SceneGraph::getInstance().printGraph(); // When all initialization are done, print SceneGraph to console
 }
 
@@ -58,16 +61,14 @@ ApplicationSolar::~ApplicationSolar() {
 ///////////////////////////// intialisation functions /////////////////////////
 // Initialize scenegraph's hierarchy object
 void ApplicationSolar::initializeSceneGraph() {
-    auto distanceBetweenPlanetInX = 5.0f; // distance between each planet in X axis
-    model planetModel = model_loader::obj(m_resource_path + "models/sphere.obj", model::NORMAL);
-
     // Initialize sceneGraph obj & Attach root node to it
     auto root = make_shared<Node>("Root");
     SceneGraph::getInstance().setRoot(root);
+    auto distanceBetweenPlanetInX = 5.0f; // distance between each planet in X axis
 
     // Add sun node as a child of root node
     auto sun = make_shared<PointLightNode>("PointLight");
-    auto sunGeo = make_shared<GeometryNode>("Sun Geometry", "planetShader", planetModel);
+    auto sunGeo = make_shared<GeometryNode>("Sun Geometry", "planetShader", planet_object);
     root->addChild(sun);
     sun->addChild(sunGeo);
     sunGeo->setLocalTransform(scale(sunGeo->getLocalTransform(), { 3.0f, 3.0f, 3.0f })); // make sun bigger size
@@ -75,8 +76,8 @@ void ApplicationSolar::initializeSceneGraph() {
     // todo-moch: refactor earth initialization and moon initialization
     // Add earth node
     auto earth = make_shared<Node>("Earth Holder");
-    auto earthGeo = make_shared<GeometryNode>("Earth Geometry", "planetShader", planetModel);
-    auto earthOrbit = make_shared<GeometryNode>("Earth Orbit", "orbitShader", planetModel);
+    auto earthGeo = make_shared<GeometryNode>("Earth Geometry", "planetShader", planet_object);
+    auto earthOrbit = make_shared<GeometryNode>("Earth Orbit", "orbitShader", planet_object);
     root->addChild(earth);
     //root->addChild(earthOrbit); todo-moch: enable when shader is ready
     earth->addChild(earthGeo);
@@ -85,8 +86,8 @@ void ApplicationSolar::initializeSceneGraph() {
     
     // Add moon as child of earth geometry
     auto moon = make_shared<Node>("Moon Holder");
-    auto moonGeo = make_shared<GeometryNode>("Moon Geometry", "planetShader", planetModel);
-    auto moonOrbit = make_shared<GeometryNode>("Moon Orbit", "orbitShader", planetModel);
+    auto moonGeo = make_shared<GeometryNode>("Moon Geometry", "planetShader", planet_object);
+    auto moonOrbit = make_shared<GeometryNode>("Moon Orbit", "orbitShader", planet_object);
     earthGeo->addChild(moon);
     //earthGeo->addChild(moonOrbit); todo-moch: enable when shader is ready
     moon->addChild(moonGeo);
@@ -98,8 +99,8 @@ void ApplicationSolar::initializeSceneGraph() {
     array<string, 7> planets = { "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune" };
     for (const auto& each : planets) {
         auto planet = make_shared<Node>(each + " Holder");
-        auto planetGeo = make_shared<GeometryNode>(each + " Geometry", "planetShader", planetModel);
-        auto planetOrbit = make_shared<GeometryNode>(each + " Orbit", "orbitShader", planetModel);
+        auto planetGeo = make_shared<GeometryNode>(each + " Geometry", "planetShader", planet_object);
+        auto planetOrbit = make_shared<GeometryNode>(each + " Orbit", "orbitShader", planet_object);
         root->addChild(planet);
         //root->addChild(planetOrbit); todo-moch: enable when shader is ready
         planet->addChild(planetGeo);
@@ -113,7 +114,7 @@ void ApplicationSolar::initializeSceneGraph() {
     }
 
     // Add star geometry node and scale its size as big as possible
-    auto starGeo = make_shared<GeometryNode>("Star", "starShader", planetModel);
+    auto starGeo = make_shared<GeometryNode>("Star", "starShader", planet_object);
     starGeo->setLocalTransform(scale(starGeo->getLocalTransform(), { 10.0f, 10.0f, 10.0f }));
     //root->addChild(starGeo); todo-moch: enable when shader is ready
 }
@@ -131,46 +132,64 @@ void ApplicationSolar::initializeCamera(fmat4 camInitialTransform, fmat4 camInit
 
 // load models
 void ApplicationSolar::initializeGeometry() {
-    model planet_model = model_loader::obj(m_resource_path + "models/sphere.obj", model::NORMAL);
+    // Generic method to setup data for rendering each geometry
+    auto initGeometry = [this](model_object& geoObject,
+                                const model* modelData,
+                                vector<float>& vertexData,
+                                GLenum drawMode,
+                                GLint numAttribute,
+                                GLint* attributeSizes,
+                                GLenum* attributeTypes,
+                                GLsizei* attributeStrides,
+                                void** attributeOffsets,
+                                GLsizei numElement,
+                                bool useIndices = false) {
+            // Generate and bind vertex array object
+            glGenVertexArrays(1, &geoObject.vertex_AO);
+            glBindVertexArray(geoObject.vertex_AO);
 
-    // generate vertex array object
-    glGenVertexArrays(1, &planet_object.vertex_AO);
-    // bind the array for attaching buffers
-    glBindVertexArray(planet_object.vertex_AO);
+            // Generate and bind vertex buffer object
+            glGenBuffers(1, &geoObject.vertex_BO);
+            glBindBuffer(GL_ARRAY_BUFFER, geoObject.vertex_BO);
+            glBufferData(GL_ARRAY_BUFFER, sizeof(float) * vertexData.size(), vertexData.data(), GL_STATIC_DRAW);
 
-    // generate generic buffer
-    glGenBuffers(1, &planet_object.vertex_BO);
-    // bind this as an vertex array buffer containing all attributes
-    glBindBuffer(GL_ARRAY_BUFFER, planet_object.vertex_BO);
-    // configure currently bound array buffer
-    glBufferData(GL_ARRAY_BUFFER, sizeof(float) * planet_model.data.size(), planet_model.data.data(), GL_STATIC_DRAW);
+            // Set up vertex attributes on gpu
+            for (GLint i = 0; i < numAttribute; ++i) {
+                glEnableVertexAttribArray(i);
+                glVertexAttribPointer(i, attributeSizes[i], attributeTypes[i], GL_FALSE, attributeStrides[i], attributeOffsets[i]);
+            }
 
-    // activate first attribute on gpu
-    glEnableVertexAttribArray(0);
-    // first attribute is 3 floats with no offset & stride
-    glVertexAttribPointer(0, model::POSITION.components, model::POSITION.type, GL_FALSE, planet_model.vertex_bytes, planet_model.offsets[model::POSITION]);
-    // activate second attribute on gpu
-    glEnableVertexAttribArray(1);
-    // second attribute is 3 floats with no offset & stride
-    glVertexAttribPointer(1, model::NORMAL.components, model::NORMAL.type, GL_FALSE, planet_model.vertex_bytes, planet_model.offsets[model::NORMAL]);
+            // If indices are used, set up IBO aswell
+            if (useIndices) {
+                glGenBuffers(1, &geoObject.element_BO);
+                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, geoObject.element_BO);
+                glBufferData(GL_ELEMENT_ARRAY_BUFFER, model::INDEX.size * modelData->indices.size(), modelData->indices.data(), GL_STATIC_DRAW);
+            }
 
-    // generate generic buffer
-    glGenBuffers(1, &planet_object.element_BO);
-    // bind this as an vertex array buffer containing all attributes
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, planet_object.element_BO);
-    // configure currently bound array buffer
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, model::INDEX.size * planet_model.indices.size(), planet_model.indices.data(), GL_STATIC_DRAW);
+            // Store draw mode and number of elements in geometry object
+            geoObject.draw_mode = drawMode;
+            geoObject.num_elements = numElement;
+    };
 
-    // store type of primitive to draw
-    planet_object.draw_mode = GL_TRIANGLES;
-    // transfer number of indices to model object 
-    planet_object.num_elements = GLsizei(planet_model.indices.size());
+    // 1. Initialize planet geometry from loaded model
+    model planetModel = model_loader::obj(m_resource_path + "models/sphere.obj", model::NORMAL);
+    GLint attributeSizes[] = { model::POSITION.components, model::NORMAL.components };
+    GLenum attributeTypes[] = { model::POSITION.type, model::NORMAL.type };
+    GLsizei attributeStrides[] = { planetModel.vertex_bytes, planetModel.vertex_bytes };
+    void* attributeOffsets[] = { planetModel.offsets[model::POSITION], planetModel.offsets[model::NORMAL] };
+    GLsizei numElement = GLsizei(planetModel.data.size());
+    initGeometry(planet_object, &planetModel, planetModel.data, GL_TRIANGLES, 2, attributeSizes, attributeTypes, attributeStrides, attributeOffsets, numElement, true);
+
+    // 2. init star model and set to node object
+
+
+    // 3. init orbit model and set to node object 
 }
 
 // load shader sources
 void ApplicationSolar::initializeShaderPrograms() {
     // store shader program objects in container
-    for (const auto& each : _shaderToUse) {
+    for (const auto& each : _shaderList) {
         auto& filePath = m_resource_path + "shaders/" + each.second;
 
         m_shaders.emplace(each.first, shader_program{ {{GL_VERTEX_SHADER,filePath+".vert"}, {GL_FRAGMENT_SHADER,filePath+".frag"}} });
@@ -185,7 +204,7 @@ void ApplicationSolar::uploadView() {
     // vertices are transformed in camera space, so camera transform must be inverted
     fmat4 viewMatrix = glm::inverse(SceneGraph::getInstance().getCamera()->getWorldTransform());
     // upload matrix to gpu
-    for (auto& const each : _shaderToUse) {
+    for (auto& const each : _shaderList) {
         glUseProgram(m_shaders.at(each.first).handle);
         glUniformMatrix4fv(m_shaders.at(each.first).u_locs.at("ViewMatrix"), 1, GL_FALSE, glm::value_ptr(viewMatrix));
     }
@@ -193,7 +212,7 @@ void ApplicationSolar::uploadView() {
 
 void ApplicationSolar::uploadProjection() {
     fmat4 projectionMatrix = SceneGraph::getInstance().getCamera()->getProjectionMatrix();
-    for (auto& const each : _shaderToUse) {
+    for (auto& const each : _shaderList) {
         glUseProgram(m_shaders.at(each.first).handle);
         glUniformMatrix4fv(m_shaders.at(each.first).u_locs.at("ProjectionMatrix"), 1, GL_FALSE, glm::value_ptr(projectionMatrix));
     }
@@ -208,39 +227,46 @@ void ApplicationSolar::uploadUniforms() {
 
 ///////////////////////////// intialisation functions /////////////////////////
 void ApplicationSolar::render() const {
-    // bind shader to upload uniforms
-    glUseProgram(m_shaders.at("planetShader").handle);
-
-    auto renderPlanet = [this](shared_ptr<Node> node) {
-        // Render only GeometryNode
+    auto transformAndDrawGeometry = [this](shared_ptr<Node> node) {
         auto geoNode = dynamic_pointer_cast<GeometryNode>(node);
-        if (!geoNode) { return; }
+        if (!geoNode) { return; } // Render only GeometryNode
 
-        // Rotate GeometryNode's parent, because rightnow all parent node is in the same position as sun
+        // ------------------- Transformation section ----------------------
         if (geoNode->getShader() == "planetShader" && geoNode->getName() != "Sun Geometry") {
+            // Rotate GeometryNode's parent, because rightnow all holder node is in the same position as sun
+            // Then the rotation of holder will affect position of childe geometry node aswell
             auto parent = geoNode->getParent();
             parent->setLocalTransform(rotate(parent->getLocalTransform(), static_cast<float>(_timer.getElapsedTime() * 10.0f), fvec3{ 0.0f, 1.0f, 0.0f }));
         }
+        // ------------------- End transformation section -------------------
+        
+        // ------------------- Drawing section -------------------------------
+        auto shaderToUse = geoNode->getShader();
+        auto geometryObject = geoNode->getGeometry();
+        auto worldTransform = geoNode->getWorldTransform();
 
-        // Then the rotation of holder node will affect position of geometry node aswell
-        auto modelTransform = geoNode->getWorldTransform();
-        glUniformMatrix4fv(m_shaders.at("planetShader").u_locs.at("ModelMatrix"), 1, GL_FALSE, glm::value_ptr(modelTransform));
+        // Bind shader to use
+        glUseProgram(m_shaders.at(shaderToUse).handle);
 
-        // extra matrix for normal transformation to keep them orthogonal to surface
-        glm::fmat4 normal_matrix = glm::inverseTranspose(glm::inverse(SceneGraph::getInstance().getCamera()->getWorldTransform()) * modelTransform);
-        glUniformMatrix4fv(m_shaders.at("planetShader").u_locs.at("NormalMatrix"), 1, GL_FALSE, glm::value_ptr(normal_matrix));
+        // Upload ModelMatrix & NormalMatrix
+        glUniformMatrix4fv(m_shaders.at(shaderToUse).u_locs.at("ModelMatrix"), 1, GL_FALSE, glm::value_ptr(worldTransform));
+        glm::fmat4 normalMatrix = glm::inverseTranspose(glm::inverse(SceneGraph::getInstance().getCamera()->getWorldTransform()) * worldTransform);
+        glUniformMatrix4fv(m_shaders.at(shaderToUse).u_locs.at("NormalMatrix"), 1, GL_FALSE, glm::value_ptr(normalMatrix)); // extra matrix for normal transformation to keep them orthogonal to surface
 
-        // bind the VAO to draw
-        glBindVertexArray(planet_object.vertex_AO);
-
-        // draw bound vertex array using bound shader
-        glDrawElements(planet_object.draw_mode, planet_object.num_elements, model::INDEX.type, NULL);
+        // Bind VAO and draw VBO
+        glBindVertexArray(geometryObject.vertex_AO);
+        if (geoNode->getShader() == "planetShader") {
+            glDrawElements(geometryObject.draw_mode, geometryObject.num_elements, model::INDEX.type, NULL);
+        }
+        else {
+            // todo-moch
+        }
+        // ------------------- End drawing section --------------------------
     };
 
-    // Traverse each geometry node from root node in SceneGraph
+    // Traverse scenegraph to render Geometry node
     auto root = SceneGraph::getInstance().getRoot();
-    renderPlanet(root);
-    root->traverse(renderPlanet);
+    root->traverse(transformAndDrawGeometry);
 }
 
 ///////////////////////////// callback functions for window events ////////////

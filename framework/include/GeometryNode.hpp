@@ -1,17 +1,17 @@
 #pragma once
 #include "Node.hpp"
+#include "structs.hpp"
 #include <string>
-#include <model.hpp>
 using std::string;
 
 class GeometryNode : public Node {
 	public:
-		GeometryNode(string name, string shader, model geometry);
+		GeometryNode(string name, string shader, model_object geometry);
 		string getShader();
-		model getGeometry();
-		void setGeometry(model geoModel);
+		model_object getGeometry();
+		void setGeometry(model_object geoModel);
 
 	private:
 		string _shader;
-		model _geometry;
+		model_object _geometry;
 };
