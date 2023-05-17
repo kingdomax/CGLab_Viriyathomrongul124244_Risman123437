@@ -40,6 +40,9 @@ namespace utils {
 
   // print matrix
   void print_matrix(glm::mat4& matrix);
+
+  // random float value between 0-1
+  float random_float();
 }
 
 #endif
