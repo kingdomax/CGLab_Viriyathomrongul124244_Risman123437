@@ -35,6 +35,7 @@ class ApplicationSolar : public Application {
 		mutable Timer _timer;
 		// key=shader name, value=file name
 		map<string, string> _shaderList;
+		bool _isRotating;
 
 	protected:
 		void initializeShaderPrograms();

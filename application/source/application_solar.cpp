@@ -51,6 +51,7 @@ ApplicationSolar::ApplicationSolar(std::string const& resource_path)
     , m_view_projection{utils::calculate_projection_matrix(initial_aspect_ratio)}
     , _timer{}
     , _shaderList{{"planetShader", "simple"}, {"starShader", "vao"}, {"orbitShader", "orbit"}}
+    , _isRotating{true}
 {
     // Initialization order is matter
     initializeGeometry();
@@ -174,16 +175,16 @@ void ApplicationSolar::initializeSceneGraph() {
     auto distanceBetweenPlanetInX = 5.0f; // distance between each planet in X axis
 
     // Add sun node as a child of root node
-    auto sun = make_shared<PointLightNode>("PointLight");
-    auto sunGeo = make_shared<GeometryNode>("Sun Geometry", "planetShader", _planetObject);
+    auto sun = make_shared<PointLightNode>("PointLight", fvec3{ 0.0f, 1.0f, 0.0f }, 100.0f);
+    auto sunGeo = make_shared<GeometryNode>("Sun Geometry", "planetShader", _planetObject, fvec3{ 1.0f, 1.0f, 0.0f });
     root->addChild(sun);
     sun->addChild(sunGeo);
     sunGeo->setLocalTransform(scale(sunGeo->getLocalTransform(), { 3.0f, 3.0f, 3.0f })); // make sun bigger size
 
     // Add earth node
     auto earth = make_shared<Node>("Earth Holder");
-    auto earthGeo = make_shared<GeometryNode>("Earth Geometry", "planetShader", _planetObject);
-    auto earthOrbit = make_shared<GeometryNode>("Earth Orbit", "orbitShader", _orbitObject);
+    auto earthGeo = make_shared<GeometryNode>("Earth Geometry", "planetShader", _planetObject, fvec3{ 0.2f, 0.5f, 0.8f });
+    auto earthOrbit = make_shared<GeometryNode>("Earth Orbit", "orbitShader", _orbitObject, fvec3{ 0.2f, 0.5f, 0.8f });
     root->addChild(earthOrbit);
     root->addChild(earth);
     earth->addChild(earthGeo);
@@ -193,8 +194,8 @@ void ApplicationSolar::initializeSceneGraph() {
     // Add moon as child of earth geometry
     auto moonSize = 0.5f;
     auto moon = make_shared<Node>("Moon Holder");
-    auto moonGeo = make_shared<GeometryNode>("Moon Geometry", "planetShader", _planetObject);
-    auto moonOrbit = make_shared<GeometryNode>("Moon Orbit", "orbitShader", _orbitObject);
+    auto moonGeo = make_shared<GeometryNode>("Moon Geometry", "planetShader", _planetObject, fvec3{ 0.75f, 0.75f, 0.75f });
+    auto moonOrbit = make_shared<GeometryNode>("Moon Orbit", "orbitShader", _orbitObject, fvec3{ 0.75f, 0.75f, 0.75f });
     earthGeo->addChild(moonOrbit);
     earthGeo->addChild(moon);
     moon->addChild(moonGeo);
@@ -203,11 +204,20 @@ void ApplicationSolar::initializeSceneGraph() {
     moonOrbit->setLocalTransform(scale(moonOrbit->getLocalTransform(), { distanceBetweenPlanetInX*moonSize, distanceBetweenPlanetInX*moonSize, distanceBetweenPlanetInX*moonSize })); // set moon orbit size
 
     // Add remaining 7 planets as children of root node
-    array<string, 7> planets = { "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune" };
+    //array<string, 7> planets = { "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune" };
+    map<string, fvec3> planets = {
+        {"Mercury", fvec3{0.5f, 0.5f, 0.5f}},
+        {"Venus", fvec3{0.95f, 0.92f, 0.84f}},
+        {"Mars", fvec3{0.8f, 0.4f, 0.3f}},
+        {"Jupiter", fvec3{0.8f, 0.7f, 0.6f}},
+        {"Saturn", fvec3{0.9f, 0.85f, 0.75f}},
+        {"Uranus", fvec3{0.5f, 0.8f, 0.9f}},
+        {"Neptune", fvec3{0.1f, 0.2f, 0.9f}}
+    };
     for (const auto& each : planets) {
-        auto planet = make_shared<Node>(each + " Holder");
-        auto planetGeo = make_shared<GeometryNode>(each + " Geometry", "planetShader", _planetObject);
-        auto planetOrbit = make_shared<GeometryNode>(each + " Orbit", "orbitShader", _orbitObject);
+        auto planet = make_shared<Node>(each.first + " Holder");
+        auto planetGeo = make_shared<GeometryNode>(each.first + " Geometry", "planetShader", _planetObject, each.second);
+        auto planetOrbit = make_shared<GeometryNode>(each.first + " Orbit", "orbitShader", _orbitObject, each.second);
         root->addChild(planetOrbit);
         root->addChild(planet);
         planet->addChild(planetGeo);
@@ -221,7 +231,7 @@ void ApplicationSolar::initializeSceneGraph() {
     }
 
     // Add star geometry node and scale its size as big as possible
-    auto starGeo = make_shared<GeometryNode>("Star", "starShader", _starObject);
+    auto starGeo = make_shared<GeometryNode>("Star", "starShader", _starObject, fvec3{1.0f, 1.0f, 1.0f});
     starGeo->setLocalTransform(scale(starGeo->getLocalTransform(), { 50.0f, 50.0f, 50.0f }));
     root->addChild(starGeo);
 }
@@ -245,7 +255,7 @@ void ApplicationSolar::render() const {
         if (!geoNode) { return; } // Render only GeometryNode
 
         // ------------------- Transformation section ----------------------
-        if (geoNode->getShader() == "planetShader" && geoNode->getName() != "Sun Geometry") {
+        if (geoNode->getShader() == "planetShader" && geoNode->getName() != "Sun Geometry" && _isRotating) {
             // Rotate GeometryNode's parent, because rightnow all holder node is in the same position as sun
             // Then the rotation of holder will affect position of childe geometry node aswell
             auto parent = geoNode->getParent();
@@ -254,6 +264,7 @@ void ApplicationSolar::render() const {
         // ------------------- End transformation section -------------------
         
         // ------------------- Drawing section -------------------------------
+        // todo-moch: we can extract rendering process to a method in Node object
         auto shaderToUse = geoNode->getShader();
         auto geometryObject = geoNode->getGeometry();
         auto worldTransform = geoNode->getWorldTransform();
@@ -328,6 +339,9 @@ void ApplicationSolar::keyCallback(int key, int action, int mods) {
     } else if (key == GLFW_KEY_D && (action == GLFW_PRESS || action == GLFW_REPEAT)) {
         camera->setLocalTransform(translate(cameraTransform, fvec3{ 0.2f, 0.0f, 0.0f })); // move camera position to right
         uploadView();
+    }
+    else if (key == GLFW_KEY_SPACE && (action == GLFW_PRESS || action == GLFW_REPEAT)) {
+        _isRotating = !_isRotating;
     }
 }
 
