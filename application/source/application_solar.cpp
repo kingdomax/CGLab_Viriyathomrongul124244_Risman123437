@@ -118,7 +118,7 @@ void ApplicationSolar::initializeGeometry() {
     initGeometry(_planetObject, &planetModel, planetModel.data, GL_TRIANGLES, 2, attributeSizes, attributeTypes, attributeStrides, attributeOffsets, numElement, true);
 
     // 2. Initialize star primitive
-    auto numberOfStars = 500;
+    auto numberOfStars = 3000;
     vector<float> starData;
     for (int i = 0; i < numberOfStars; ++i) { // Each Star data layout consists of 3 number for xyz coordinate and 3 number for rgb color
         for (int p = 0; p < POSITION_COMPONENTS; ++p) { // each model space's coordinate will be a random float between - 1 and 1
