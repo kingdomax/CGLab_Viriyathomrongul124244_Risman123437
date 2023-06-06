@@ -36,6 +36,7 @@ class ApplicationSolar : public Application {
 		// key=shader name, value=file name
 		map<string, string> _shaderList;
 		bool _isRotating;
+		bool _isRenderingWithCel;
 
 	protected:
 		void initializeShaderPrograms();

@@ -339,9 +339,12 @@ void ApplicationSolar::keyCallback(int key, int action, int mods) {
     } else if (key == GLFW_KEY_D && (action == GLFW_PRESS || action == GLFW_REPEAT)) {
         camera->setLocalTransform(translate(cameraTransform, fvec3{ 0.2f, 0.0f, 0.0f })); // move camera position to right
         uploadView();
-    }
-    else if (key == GLFW_KEY_SPACE && (action == GLFW_PRESS || action == GLFW_REPEAT)) {
+    } else if (key == GLFW_KEY_SPACE && (action == GLFW_PRESS || action == GLFW_REPEAT)) {
         _isRotating = !_isRotating;
+    } else if (key == GLFW_KEY_1 && (action == GLFW_PRESS || action == GLFW_REPEAT)) {
+        _isRenderingWithCel = true;
+    } else if (key == GLFW_KEY_2 && (action == GLFW_PRESS || action == GLFW_REPEAT)) {
+        _isRenderingWithCel = false;
     }
 }
 
