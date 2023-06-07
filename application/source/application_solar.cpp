@@ -51,6 +51,8 @@ ApplicationSolar::ApplicationSolar(std::string const& resource_path)
     , m_view_projection{utils::calculate_projection_matrix(initial_aspect_ratio)}
     , _timer{}
     , _shaderList{{"planetShader", "simple"}, {"starShader", "vao"}, {"orbitShader", "orbit"}}
+    , _isRotating{true}
+    , _enableToonShading{false}
 {
     // Initialization order is matter
     initializeGeometry();
@@ -157,12 +159,20 @@ void ApplicationSolar::initializeShaderPrograms() {
     // store shader program objects in container
     for (const auto& each : _shaderList) {
         auto& filePath = m_resource_path + "shaders/" + each.second;
-
         m_shaders.emplace(each.first, shader_program{ {{GL_VERTEX_SHADER,filePath + ".vert"}, {GL_FRAGMENT_SHADER,filePath + ".frag"}} });
+        
         m_shaders.at(each.first).u_locs["NormalMatrix"] = -1;
         m_shaders.at(each.first).u_locs["ModelMatrix"] = -1;
         m_shaders.at(each.first).u_locs["ViewMatrix"] = -1;
         m_shaders.at(each.first).u_locs["ProjectionMatrix"] = -1;
+
+        m_shaders.at(each.first).u_locs["GeometryColor"] = -1;
+        m_shaders.at(each.first).u_locs["AmbientColor"] = -1;
+        m_shaders.at(each.first).u_locs["AmbientStrength"] = -1;
+        m_shaders.at(each.first).u_locs["LightPosition"] = -1;
+        m_shaders.at(each.first).u_locs["LightColor"] = -1;
+        m_shaders.at(each.first).u_locs["CameraPosition"] = -1;
+        m_shaders.at(each.first).u_locs["EnableToonShading"] = -1;
     }
 }
 
@@ -174,16 +184,17 @@ void ApplicationSolar::initializeSceneGraph() {
     auto distanceBetweenPlanetInX = 5.0f; // distance between each planet in X axis
 
     // Add sun node as a child of root node
-    auto sun = make_shared<PointLightNode>("PointLight");
-    auto sunGeo = make_shared<GeometryNode>("Sun Geometry", "planetShader", _planetObject);
+    auto sun = make_shared<PointLightNode>("PointLight", fvec3{ 1.0f, 1.0f, 1.0f }, 1.0f);
+    auto sunGeo = make_shared<GeometryNode>("Sun Geometry", "planetShader", _planetObject, fvec3{ 1.0f, 1.0f, 1.0f });
     root->addChild(sun);
     sun->addChild(sunGeo);
     sunGeo->setLocalTransform(scale(sunGeo->getLocalTransform(), { 3.0f, 3.0f, 3.0f })); // make sun bigger size
+    SceneGraph::getInstance().setDirectionalLight(sun);
 
     // Add earth node
     auto earth = make_shared<Node>("Earth Holder");
-    auto earthGeo = make_shared<GeometryNode>("Earth Geometry", "planetShader", _planetObject);
-    auto earthOrbit = make_shared<GeometryNode>("Earth Orbit", "orbitShader", _orbitObject);
+    auto earthGeo = make_shared<GeometryNode>("Earth Geometry", "planetShader", _planetObject, fvec3{ 0.2f, 0.5f, 0.8f });
+    auto earthOrbit = make_shared<GeometryNode>("Earth Orbit", "orbitShader", _orbitObject, fvec3{ 0.2f, 0.5f, 0.8f });
     root->addChild(earthOrbit);
     root->addChild(earth);
     earth->addChild(earthGeo);
@@ -193,8 +204,8 @@ void ApplicationSolar::initializeSceneGraph() {
     // Add moon as child of earth geometry
     auto moonSize = 0.5f;
     auto moon = make_shared<Node>("Moon Holder");
-    auto moonGeo = make_shared<GeometryNode>("Moon Geometry", "planetShader", _planetObject);
-    auto moonOrbit = make_shared<GeometryNode>("Moon Orbit", "orbitShader", _orbitObject);
+    auto moonGeo = make_shared<GeometryNode>("Moon Geometry", "planetShader", _planetObject, fvec3{ 0.75f, 0.75f, 0.75f });
+    auto moonOrbit = make_shared<GeometryNode>("Moon Orbit", "orbitShader", _orbitObject, fvec3{ 0.75f, 0.75f, 0.75f });
     earthGeo->addChild(moonOrbit);
     earthGeo->addChild(moon);
     moon->addChild(moonGeo);
@@ -203,11 +214,19 @@ void ApplicationSolar::initializeSceneGraph() {
     moonOrbit->setLocalTransform(scale(moonOrbit->getLocalTransform(), { distanceBetweenPlanetInX*moonSize, distanceBetweenPlanetInX*moonSize, distanceBetweenPlanetInX*moonSize })); // set moon orbit size
 
     // Add remaining 7 planets as children of root node
-    array<string, 7> planets = { "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune" };
+    map<string, fvec3> planets = {
+        {"Mercury", fvec3{0.5f, 0.5f, 0.5f}},
+        {"Venus", fvec3{0.95f, 0.92f, 0.84f}},
+        {"Mars", fvec3{0.8f, 0.4f, 0.3f}},
+        {"Jupiter", fvec3{0.8f, 0.7f, 0.6f}},
+        {"Saturn", fvec3{0.9f, 0.85f, 0.75f}},
+        {"Uranus", fvec3{0.5f, 0.8f, 0.9f}},
+        {"Neptune", fvec3{0.1f, 0.2f, 0.9f}}
+    };
     for (const auto& each : planets) {
-        auto planet = make_shared<Node>(each + " Holder");
-        auto planetGeo = make_shared<GeometryNode>(each + " Geometry", "planetShader", _planetObject);
-        auto planetOrbit = make_shared<GeometryNode>(each + " Orbit", "orbitShader", _orbitObject);
+        auto planet = make_shared<Node>(each.first + " Holder");
+        auto planetGeo = make_shared<GeometryNode>(each.first + " Geometry", "planetShader", _planetObject, each.second);
+        auto planetOrbit = make_shared<GeometryNode>(each.first + " Orbit", "orbitShader", _orbitObject, each.second);
         root->addChild(planetOrbit);
         root->addChild(planet);
         planet->addChild(planetGeo);
@@ -221,7 +240,7 @@ void ApplicationSolar::initializeSceneGraph() {
     }
 
     // Add star geometry node and scale its size as big as possible
-    auto starGeo = make_shared<GeometryNode>("Star", "starShader", _starObject);
+    auto starGeo = make_shared<GeometryNode>("Star", "starShader", _starObject, fvec3{1.0f, 1.0f, 1.0f});
     starGeo->setLocalTransform(scale(starGeo->getLocalTransform(), { 50.0f, 50.0f, 50.0f }));
     root->addChild(starGeo);
 }
@@ -245,7 +264,7 @@ void ApplicationSolar::render() const {
         if (!geoNode) { return; } // Render only GeometryNode
 
         // ------------------- Transformation section ----------------------
-        if (geoNode->getShader() == "planetShader" && geoNode->getName() != "Sun Geometry") {
+        if (geoNode->getShader() == "planetShader" && geoNode->getName() != "Sun Geometry" && _isRotating) {
             // Rotate GeometryNode's parent, because rightnow all holder node is in the same position as sun
             // Then the rotation of holder will affect position of childe geometry node aswell
             auto parent = geoNode->getParent();
@@ -253,28 +272,44 @@ void ApplicationSolar::render() const {
         }
         // ------------------- End transformation section -------------------
         
-        // ------------------- Drawing section -------------------------------
+        // ------------------- Shading & Drawing section ------------------------------- (todo-moch: we can extract rendering process to a method in Node object)
+        auto geometry = geoNode->getGeometry();
         auto shaderToUse = geoNode->getShader();
-        auto geometryObject = geoNode->getGeometry();
-        auto worldTransform = geoNode->getWorldTransform();
+        
+        auto geoNodeWorldTransform = geoNode->getWorldTransform();
+        auto geoNodeColor = geoNode->getGeometryColor();
+        auto sunNode = SceneGraph::getInstance().getDirectionalLight();
+        auto sunNodeWorldTransform = sunNode->getWorldTransform();
+        auto sunNodeColor = sunNode->getLightColor() * sunNode->getLightIntensity();
+        auto cameraNode = SceneGraph::getInstance().getCamera();
+        auto cameraNodeWorldTransform = cameraNode->getWorldTransform();
 
         // Bind shader to use
         glUseProgram(m_shaders.at(shaderToUse).handle);
+        
+        // Upload light attribute for fragment shader
+        if (shaderToUse == "planetShader") {
+            glUniform3fv(m_shaders.at(shaderToUse).u_locs.at("GeometryColor"), 1, glm::value_ptr(geoNodeColor));
+            glUniform3fv(m_shaders.at(shaderToUse).u_locs.at("AmbientColor"), 1, glm::value_ptr(geoNodeColor));
+            glUniform1f(m_shaders.at(shaderToUse).u_locs.at("AmbientStrength"), geoNode->getName() == "Sun Geometry" ? sunNode->getLightIntensity() : 0.3f);
+            glUniform3fv(m_shaders.at(shaderToUse).u_locs.at("LightColor"), 1, glm::value_ptr(sunNodeColor));
+            glUniform3fv(m_shaders.at(shaderToUse).u_locs.at("LightPosition"), 1, glm::value_ptr(sunNodeWorldTransform * glm::vec4{ 0, 0, 0, 1 })); // Make sure 
+            glUniform3fv(m_shaders.at(shaderToUse).u_locs.at("CameraPosition"), 1, glm::value_ptr(cameraNodeWorldTransform * glm::vec4{ 0, 0, 0, 1 }));
+            glUniform1b(m_shaders.at(shaderToUse).u_locs.at("EnableToonShading"), _enableToonShading);
+        }
 
-        // Upload ModelMatrix & NormalMatrix from CPU to GPU
-        // Note: glUniformMatrix4fv() is used for per draw call (i.e. uniforms, entire primitive), 
-        //       while glVertexAttribPointer() is used for per vertex
-        glUniformMatrix4fv(m_shaders.at(shaderToUse).u_locs.at("ModelMatrix"), 1, GL_FALSE, glm::value_ptr(worldTransform));
-        glm::fmat4 normalMatrix = glm::inverseTranspose(glm::inverse(SceneGraph::getInstance().getCamera()->getWorldTransform()) * worldTransform);
+        // Upload ModelMatrix & NormalMatrix
+        glUniformMatrix4fv(m_shaders.at(shaderToUse).u_locs.at("ModelMatrix"), 1, GL_FALSE, glm::value_ptr(geoNodeWorldTransform)); // Note: glUniformMatrix4fv() is used for per draw call (i.e. uniforms, entire primitive), while glVertexAttribPointer() is used for per vertex
+        glm::fmat4 normalMatrix = glm::inverseTranspose(glm::inverse(cameraNodeWorldTransform) * geoNodeWorldTransform);
         glUniformMatrix4fv(m_shaders.at(shaderToUse).u_locs.at("NormalMatrix"), 1, GL_FALSE, glm::value_ptr(normalMatrix)); // extra matrix for normal transformation to keep them orthogonal to surface
 
-        // Bind VAO and draw VBO
-        glBindVertexArray(geometryObject.vertex_AO);
-        if (geoNode->getShader() == "planetShader") {
-            glDrawElements(geometryObject.draw_mode, geometryObject.num_elements, model::INDEX.type, NULL);
+        // Draw VBO
+        glBindVertexArray(geometry.vertex_AO);
+        if (shaderToUse == "planetShader") {
+            glDrawElements(geometry.draw_mode, geometry.num_elements, model::INDEX.type, NULL);
         }
         else {
-            glDrawArrays(geometryObject.draw_mode, 0, geometryObject.num_elements);
+            glDrawArrays(geometry.draw_mode, 0, geometry.num_elements);
         }
         // ------------------- End drawing section --------------------------
     };
@@ -328,6 +363,12 @@ void ApplicationSolar::keyCallback(int key, int action, int mods) {
     } else if (key == GLFW_KEY_D && (action == GLFW_PRESS || action == GLFW_REPEAT)) {
         camera->setLocalTransform(translate(cameraTransform, fvec3{ 0.2f, 0.0f, 0.0f })); // move camera position to right
         uploadView();
+    } else if (key == GLFW_KEY_SPACE && (action == GLFW_PRESS || action == GLFW_REPEAT)) {
+        _isRotating = !_isRotating;
+    } else if (key == GLFW_KEY_1 && (action == GLFW_PRESS || action == GLFW_REPEAT)) {
+        _enableToonShading = true;
+    } else if (key == GLFW_KEY_2 && (action == GLFW_PRESS || action == GLFW_REPEAT)) {
+        _enableToonShading = false;
     }
 }
 
