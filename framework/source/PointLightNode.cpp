@@ -11,5 +11,5 @@ PointLightNode::PointLightNode(string name, fvec3 lightColor, float lightIntensi
     _lightIntensity(lightIntensity){
 }
 
-fvec3 PointLightNode::GetLightColor() { return _lightColor; }
-float PointLightNode::GetLightIntensity() { return _lightIntensity; }
+fvec3 PointLightNode::getLightColor() { return _lightColor; }
+float PointLightNode::getLightIntensity() { return _lightIntensity; }

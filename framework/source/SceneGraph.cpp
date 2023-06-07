@@ -1,6 +1,7 @@
 #include "Node.hpp"
 #include "SceneGraph.hpp"
 #include "CameraNode.hpp"
+#include "PointLightNode.hpp"
 #include <string>
 #include <memory>
 #include <iostream>
@@ -20,6 +21,9 @@ void SceneGraph::setName(string name) { _name = name; }
 
 shared_ptr<Node> SceneGraph::getRoot() { return _root; }
 void SceneGraph::setRoot(shared_ptr<Node> rootNode) { _root = rootNode; }
+
+shared_ptr<PointLightNode> SceneGraph::getDirectionalLight() { return _dirLight; }
+void SceneGraph::setDirectionalLight(shared_ptr<PointLightNode> dirLight) { _dirLight = dirLight; }
 
 shared_ptr<CameraNode> SceneGraph::getCamera() { return _camera; }
 void SceneGraph::setCamera(shared_ptr<CameraNode> cameraNode) { _camera = cameraNode; }

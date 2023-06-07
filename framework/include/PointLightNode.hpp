@@ -8,9 +8,8 @@ using glm::fvec3;
 class PointLightNode : public Node {
 	public:
 		PointLightNode(string name, fvec3 lightColor, float lightIntensity);
-		fvec3 GetLightColor();
-		float GetLightIntensity();
-
+		fvec3 getLightColor();
+		float getLightIntensity();
 
 	private: 
 		fvec3 _lightColor;
