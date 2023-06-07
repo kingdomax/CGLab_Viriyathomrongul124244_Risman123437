@@ -33,8 +33,8 @@ void main() {
 
     // 3) Specular light
     vec3 reflectDirection = reflect(-lightDirection, normalVector); // Calculate a reflection vector by reflecting the light direction around the normal vector
-    float vDotR = max(dot(viewDirection, reflectDirection), 0.0); // Calculate the angle distance between this reflection vector and the view direction
-    float specularIntensity = pow(vDotR, SpecularShinessSize); // Calculate the specular component
+    float nDotR = max(dot(viewDirection, reflectDirection), 0.0); // Calculate the angle distance between this reflection vector and the view direction
+    float specularIntensity = pow(nDotR, SpecularShinessSize); // Calculate the specular component
     vec3 specularLight = specularIntensity * SpecularStrength * LightColor; 
   
     // 4) Toon Shading
@@ -49,7 +49,7 @@ void main() {
       }
     }
 
-    // 5. Return fragment color
+    // 5. Blend fragment color
     vec3 result = (ambientLight + diffuseLight + specularLight) * GeometryColor;
     out_Color = vec4(result, 1.0);
 }

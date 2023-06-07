@@ -169,7 +169,6 @@ void ApplicationSolar::initializeShaderPrograms() {
         m_shaders.at(each.first).u_locs["GeometryColor"] = -1;
         m_shaders.at(each.first).u_locs["AmbientColor"] = -1;
         m_shaders.at(each.first).u_locs["AmbientStrength"] = -1;
-        m_shaders.at(each.first).u_locs["OutlineColor"] = -1;
         m_shaders.at(each.first).u_locs["LightPosition"] = -1;
         m_shaders.at(each.first).u_locs["LightColor"] = -1;
         m_shaders.at(each.first).u_locs["CameraPosition"] = -1;
@@ -215,7 +214,6 @@ void ApplicationSolar::initializeSceneGraph() {
     moonOrbit->setLocalTransform(scale(moonOrbit->getLocalTransform(), { distanceBetweenPlanetInX*moonSize, distanceBetweenPlanetInX*moonSize, distanceBetweenPlanetInX*moonSize })); // set moon orbit size
 
     // Add remaining 7 planets as children of root node
-    //array<string, 7> planets = { "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune" };
     map<string, fvec3> planets = {
         {"Mercury", fvec3{0.5f, 0.5f, 0.5f}},
         {"Venus", fvec3{0.95f, 0.92f, 0.84f}},
@@ -293,9 +291,9 @@ void ApplicationSolar::render() const {
         if (shaderToUse == "planetShader") {
             glUniform3fv(m_shaders.at(shaderToUse).u_locs.at("GeometryColor"), 1, glm::value_ptr(geoNodeColor));
             glUniform3fv(m_shaders.at(shaderToUse).u_locs.at("AmbientColor"), 1, glm::value_ptr(geoNodeColor));
-            glUniform1f(m_shaders.at(shaderToUse).u_locs.at("AmbientStrength"), geoNode->getName() == "Sun Geometry" ? sunNode->getLightIntensity() : 0.3f); // increase amibent strength of sun
+            glUniform1f(m_shaders.at(shaderToUse).u_locs.at("AmbientStrength"), geoNode->getName() == "Sun Geometry" ? sunNode->getLightIntensity() : 0.3f);
             glUniform3fv(m_shaders.at(shaderToUse).u_locs.at("LightColor"), 1, glm::value_ptr(sunNodeColor));
-            glUniform3fv(m_shaders.at(shaderToUse).u_locs.at("LightPosition"), 1, glm::value_ptr(sunNodeWorldTransform * glm::vec4{ 0, 0, 0, 1 }));
+            glUniform3fv(m_shaders.at(shaderToUse).u_locs.at("LightPosition"), 1, glm::value_ptr(sunNodeWorldTransform * glm::vec4{ 0, 0, 0, 1 })); // Make sure 
             glUniform3fv(m_shaders.at(shaderToUse).u_locs.at("CameraPosition"), 1, glm::value_ptr(cameraNodeWorldTransform * glm::vec4{ 0, 0, 0, 1 }));
             glUniform1b(m_shaders.at(shaderToUse).u_locs.at("EnableToonShading"), _enableToonShading);
         }
