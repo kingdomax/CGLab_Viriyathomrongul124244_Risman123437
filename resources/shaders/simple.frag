@@ -1,14 +1,15 @@
 #version 150
 
+const float TonnShadingBin = 1;
 const int SpecularShinessSize = 16;
 const float SpecularStrength = 0.5f;
+const vec4 OutlineColor = vec4(0.0f, 0.88f, 1.0f, 1.0f);
 
 uniform vec3 LightColor;
 uniform vec3 LightPosition;
-uniform vec3 AmbientColor; // ambient = GeometryColor (hint: ambient color can be the same as the diffuuse color and specular color can be white)
+uniform vec3 AmbientColor;
 uniform float AmbientStrength;
 uniform vec3 GeometryColor;
-uniform vec3 OutlineColor;
 uniform vec3 CameraPosition;
 uniform bool EnableToonShading;
 
@@ -36,16 +37,17 @@ void main() {
     float specularIntensity = pow(vDotR, SpecularShinessSize); // Calculate the specular component
     vec3 specularLight = specularIntensity * SpecularStrength * LightColor; 
   
-    // 4) Toon Shading (20%)
-    // 4.1 Further step of color discretisation, if colour > threshold then m colour1 else m colour2
-    // 4.2 In order to detect a relevant edge you should calculate the dot product between the surface normal and the view direction
-    //     If this value is above a threshold assign to that fragment the outlineColor
-    
+    // 4) Toon Shading
     if (EnableToonShading) {
-      out_Color = vec4(GeometryColor, 1.0);
-      return;
+      float edgeAngle = dot(normalVector, viewDirection); // Detect a relevant edge by calculate the dot product between the surface normal and the view direction
+      if (edgeAngle > 0.0f && edgeAngle <= 0.2f) {
+        out_Color = OutlineColor;
+        return;
+      } else {
+        // color quantization
+        diffuseLight = ceil(diffuseLight * TonnShadingBin) / TonnShadingBin;
+      }
     }
-
 
     // 5. Return fragment color
     vec3 result = (ambientLight + diffuseLight + specularLight) * GeometryColor;

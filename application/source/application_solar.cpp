@@ -294,11 +294,8 @@ void ApplicationSolar::render() const {
             glUniform3fv(m_shaders.at(shaderToUse).u_locs.at("GeometryColor"), 1, glm::value_ptr(geoNodeColor));
             glUniform3fv(m_shaders.at(shaderToUse).u_locs.at("AmbientColor"), 1, glm::value_ptr(geoNodeColor));
             glUniform1f(m_shaders.at(shaderToUse).u_locs.at("AmbientStrength"), geoNode->getName() == "Sun Geometry" ? sunNode->getLightIntensity() : 0.3f); // increase amibent strength of sun
-
-            glUniform3fv(m_shaders.at(shaderToUse).u_locs.at("LightPosition"), 1, glm::value_ptr(sunNodeWorldTransform * glm::vec4{ 0, 0, 0, 1 }));
             glUniform3fv(m_shaders.at(shaderToUse).u_locs.at("LightColor"), 1, glm::value_ptr(sunNodeColor));
-
-            glUniform3fv(m_shaders.at(shaderToUse).u_locs.at("CameraPosition"), 1, glm::value_ptr(cameraNodeWorldTransform * glm::vec4{ 0, 0, 0, 1 }));
+            glUniform3fv(m_shaders.at(shaderToUse).u_locs.at("LightPosition"), 1, glm::value_ptr(sunNodeWorldTransform * glm::vec4{ 0, 0, 0, 1 }));
             glUniform3fv(m_shaders.at(shaderToUse).u_locs.at("CameraPosition"), 1, glm::value_ptr(cameraNodeWorldTransform * glm::vec4{ 0, 0, 0, 1 }));
             glUniform1b(m_shaders.at(shaderToUse).u_locs.at("EnableToonShading"), _enableToonShading);
         }
