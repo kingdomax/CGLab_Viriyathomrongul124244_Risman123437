@@ -9,12 +9,14 @@ uniform vec3 LightColor;
 uniform vec3 LightPosition;
 uniform vec3 AmbientColor;
 uniform float AmbientStrength;
-uniform vec3 GeometryColor;
+//uniform vec3 GeometryColor;
 uniform vec3 CameraPosition;
 uniform bool EnableToonShading;
+uniform sampler2D Texture;
 
 in vec3 normal_vector;
 in vec3 fragment_position;
+in vec2 texture_coordinate;
 out vec4 out_Color;
 
 // https://learnopengl.com/Lighting/Basic-Lighting
@@ -50,6 +52,6 @@ void main() {
     }
 
     // 5. Blend fragment color
-    vec3 result = (ambientLight + diffuseLight + specularLight) * GeometryColor;
+    vec3 result = (ambientLight + diffuseLight + specularLight) * vec3(texture(Texture, texture_coordinate));
     out_Color = vec4(result, 1.0);
 }

@@ -41,6 +41,7 @@ class ApplicationSolar : public Application {
 	protected:
 		void initializeShaderPrograms();
 		void initializeGeometry();
+		texture_object initializeTexture(const string& textureFile);
 		// update uniform values
 		void uploadUniforms();
 		// upload projection matrix
