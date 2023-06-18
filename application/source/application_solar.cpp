@@ -48,10 +48,11 @@ ApplicationSolar::ApplicationSolar(std::string const& resource_path)
     , _planetObject{}
     , _starObject{}
     , _orbitObject{}
+    , _skyboxObject{}
     , m_view_transform{glm::translate(glm::fmat4{}, glm::fvec3{0.0f, 0.0f, 20.0f})}
     , m_view_projection{utils::calculate_projection_matrix(initial_aspect_ratio)}
     , _timer{}
-    , _shaderList{{"planetShader", "simple"}, {"starShader", "vao"}, {"orbitShader", "orbit"}}
+    , _shaderList{ {"planetShader", "simple"}, {"starShader", "vao"}, {"orbitShader", "orbit"}, {"skyboxShader", "skybox"} }
     , _isRotating{true}
     , _enableToonShading{false}
 {
@@ -140,7 +141,7 @@ void ApplicationSolar::initializeGeometry() {
 
     // 3. Initialize orbit primitive
     auto numberOfPointInTheLine = 128;
-    std::vector<float> orbitData;
+    vector<float> orbitData;
     for (int i = 0; i < numberOfPointInTheLine; ++i) { // Calculate coodinate around circle
         float theta = TWO_PI * static_cast<float>(i) / numberOfPointInTheLine; // Calculates an angle theta, which is evenly spaced around a full circle 2 * PI * radians
         orbitData.emplace_back(sin(theta)); // x coordinate = horizontal position of the point on the circle
@@ -153,6 +154,59 @@ void ApplicationSolar::initializeGeometry() {
     void* orbitAttributeOffsets[] = { 0 };
     GLsizei orbitNumElement = GLsizei(orbitData.size() / POSITION_COMPONENTS);
     initGeometry(_orbitObject, nullptr, orbitData, GL_LINE_LOOP, 1, orbitAttributeSizes, orbitAttributeTypes, orbitAttributeStrides, orbitAttributeOffsets, orbitNumElement);
+
+    // 4. Initialize skybox primitive
+    vector<float> cubeData = {
+        // Define 2 triangles for each cube face
+        // back      
+        -1.0f,  1.0f, -1.0f,
+        -1.0f, -1.0f, -1.0f,
+         1.0f, -1.0f, -1.0f,
+         1.0f, -1.0f, -1.0f,
+         1.0f,  1.0f, -1.0f,
+        -1.0f,  1.0f, -1.0f,
+        // left
+        -1.0f, -1.0f,  1.0f,
+        -1.0f, -1.0f, -1.0f,
+        -1.0f,  1.0f, -1.0f,
+        -1.0f,  1.0f, -1.0f,
+        -1.0f,  1.0f,  1.0f,
+        -1.0f, -1.0f,  1.0f,
+        // right
+         1.0f, -1.0f, -1.0f,
+         1.0f, -1.0f,  1.0f,
+         1.0f,  1.0f,  1.0f,
+         1.0f,  1.0f,  1.0f,
+         1.0f,  1.0f, -1.0f,
+         1.0f, -1.0f, -1.0f,
+         // front
+        -1.0f, -1.0f,  1.0f,
+        -1.0f,  1.0f,  1.0f,
+         1.0f,  1.0f,  1.0f,
+         1.0f,  1.0f,  1.0f,
+         1.0f, -1.0f,  1.0f,
+        -1.0f, -1.0f,  1.0f,
+        // top
+        -1.0f,  1.0f, -1.0f,
+         1.0f,  1.0f, -1.0f,
+         1.0f,  1.0f,  1.0f,
+         1.0f,  1.0f,  1.0f,
+        -1.0f,  1.0f,  1.0f,
+        -1.0f,  1.0f, -1.0f,
+        // bottom
+        -1.0f, -1.0f, -1.0f,
+        -1.0f, -1.0f,  1.0f,
+         1.0f, -1.0f, -1.0f,
+         1.0f, -1.0f, -1.0f,
+        -1.0f, -1.0f,  1.0f,
+         1.0f, -1.0f,  1.0f
+    };
+    GLint cubeAttributeSizes[] = { POSITION_COMPONENTS };
+    GLenum cubeAttributeTypes[] = { GL_FLOAT };
+    GLsizei cubeAttributeStrides[] = { sizeof(float) * POSITION_COMPONENTS };
+    void* cubeAttributeOffsets[] = { 0 };
+    GLsizei cubeNumElement = GLsizei(cubeData.size());
+    initGeometry(_skyboxObject, nullptr, cubeData, GL_TRIANGLES, 1, cubeAttributeSizes, cubeAttributeTypes, cubeAttributeStrides, cubeAttributeOffsets, cubeNumElement);
 }
 
 // load shader sources
@@ -179,7 +233,7 @@ void ApplicationSolar::initializeShaderPrograms() {
 }
 
 texture_object ApplicationSolar::initializeTexture(const string& textureFile) {
-    // Initialize texture
+    // Initialize 2D texture
     texture_object textureObject;
     textureObject.target = GL_TEXTURE_2D;
     glGenTextures(1, &(textureObject.handle));
@@ -198,6 +252,30 @@ texture_object ApplicationSolar::initializeTexture(const string& textureFile) {
     // Generates a set of smaller textures from the current texture, used in texture filtering
     glGenerateMipmap(GL_TEXTURE_2D);
     
+    return textureObject;
+}
+
+texture_object ApplicationSolar::initializeCubemapTexture() {
+    // Initialize cubemap texture
+    texture_object textureObject;
+    textureObject.target = GL_TEXTURE_CUBE_MAP;
+    glGenTextures(1, &(textureObject.handle));
+    glBindTexture(GL_TEXTURE_CUBE_MAP, textureObject.handle); // bind cubemap texture
+
+    // Configure wrapping mode and texture filtering mode
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+
+    // Upload testure to each cube face
+    vector<string> faces { "right", "left", "bottom", "top", "back", "front" };
+    for (auto i = 0; i < faces.size(); ++i) {
+        pixel_data pixelData = texture_loader::file(m_resource_path + "textures/bkg1_" + faces[i] + ".png");
+        glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, pixelData.channels, pixelData.width, pixelData.height, 0, pixelData.channels, pixelData.channel_type, pixelData.ptr());
+    }
+
     return textureObject;
 }
 
@@ -268,6 +346,12 @@ void ApplicationSolar::initializeSceneGraph() {
     auto starGeo = make_shared<GeometryNode>("Star", "starShader", _starObject, fvec3{1.0f, 1.0f, 1.0f});
     starGeo->setLocalTransform(scale(starGeo->getLocalTransform(), { 50.0f, 50.0f, 50.0f }));
     root->addChild(starGeo);
+
+    // Add sky box node and encompass the entire scene
+    auto skyboxGeo = make_shared<GeometryNode>("Skybox", "skyboxShader", _skyboxObject, fvec3{ 1.0f, 1.0f, 1.0f }, initializeCubemapTexture());
+    skyboxGeo->setLocalTransform(scale(skyboxGeo->getLocalTransform(), { 40.0f, 40.0f, 40.0f }));
+    skyboxGeo->setLocalTransform(rotate(skyboxGeo->getLocalTransform(), glm::radians(180.0f), glm::vec3(0.0f, 0.0f, 1.0f)));
+    root->addChild(skyboxGeo);
 }
 
 // Setup camera node
@@ -323,13 +407,15 @@ void ApplicationSolar::render() const {
         if (shaderToUse == "planetShader") {
             // glUniform3fv(m_shaders.at(shaderToUse).u_locs.at("GeometryColor"), 1, glm::value_ptr(geoNodeColor));
             glUniform3fv(m_shaders.at(shaderToUse).u_locs.at("AmbientColor"), 1, glm::value_ptr(fvec3{ 1.0f, 1.0f, 1.0f }));
-            glUniform1f(m_shaders.at(shaderToUse).u_locs.at("AmbientStrength"), geoNode->getName() == "Sun Geometry" ? sunNode->getLightIntensity() : 0.3f);
+            glUniform1f(m_shaders.at(shaderToUse).u_locs.at("AmbientStrength"), geoNode->getName() == "Sun Geometry" ? sunNode->getLightIntensity() : 0.2f);
             glUniform3fv(m_shaders.at(shaderToUse).u_locs.at("LightColor"), 1, glm::value_ptr(sunNodeColor));
             glUniform3fv(m_shaders.at(shaderToUse).u_locs.at("LightPosition"), 1, glm::value_ptr(sunNodeWorldTransform * glm::vec4{ 0, 0, 0, 1 })); // Make sure 
             glUniform3fv(m_shaders.at(shaderToUse).u_locs.at("CameraPosition"), 1, glm::value_ptr(cameraNodeWorldTransform * glm::vec4{ 0, 0, 0, 1 }));
             glUniform1b(m_shaders.at(shaderToUse).u_locs.at("EnableToonShading"), _enableToonShading);
+        }
 
-            // Select texture, access it and upload texture data to shader program
+        // Select texture, access it and upload texture data to shader program
+        if (shaderToUse == "planetShader" || shaderToUse == "skyboxShader") {
             glActiveTexture(GL_TEXTURE0);
             glBindTexture(geoNodeTexture.target, geoNodeTexture.handle);
             glUniform1i(m_shaders.at(shaderToUse).u_locs.at("Texture"), 0);
