@@ -41,6 +41,8 @@ class ApplicationSolar : public Application {
 	protected:
 		void initializeShaderPrograms();
 		void initializeGeometry();
+		texture_object initializeTexture(const string& textureFile);
+		texture_object initializeCubemapTexture();
 		// update uniform values
 		void uploadUniforms();
 		// upload projection matrix
@@ -52,7 +54,8 @@ class ApplicationSolar : public Application {
 		model_object _planetObject;
 		model_object _starObject;
 		model_object _orbitObject;
-  
+		model_object _skyboxObject;
+
 		// camera transform matrix
 		glm::fmat4 m_view_transform;
 		// camera projection matrix
