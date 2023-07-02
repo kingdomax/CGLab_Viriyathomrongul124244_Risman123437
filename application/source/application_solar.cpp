@@ -270,9 +270,10 @@ texture_object ApplicationSolar::initializeCubemapTexture() {
     glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 
     // Upload testure to each cube face
-    vector<string> faces { "right", "left", "bottom", "top", "back", "front" };
+    //vector<string> faces { "right", "left", "bottom", "top", "back", "front" }; config for earth's skybox version
+    vector<string> faces { "right", "left", "bottom", "top", "front", "back" };
     for (auto i = 0; i < faces.size(); ++i) {
-        pixel_data pixelData = texture_loader::file(m_resource_path + "textures/bkg1_" + faces[i] + ".png");
+        pixel_data pixelData = texture_loader::file(m_resource_path + "textures/skybox/" + faces[i] + ".png");
         glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, pixelData.channels, pixelData.width, pixelData.height, 0, pixelData.channels, pixelData.channel_type, pixelData.ptr());
     }
 
@@ -350,7 +351,7 @@ void ApplicationSolar::initializeSceneGraph() {
     // Add sky box node and encompass the entire scene
     auto skyboxGeo = make_shared<GeometryNode>("Skybox", "skyboxShader", _skyboxObject, fvec3{ 1.0f, 1.0f, 1.0f }, initializeCubemapTexture());
     skyboxGeo->setLocalTransform(scale(skyboxGeo->getLocalTransform(), { 40.0f, 40.0f, 40.0f }));
-    skyboxGeo->setLocalTransform(rotate(skyboxGeo->getLocalTransform(), glm::radians(180.0f), glm::vec3(0.0f, 0.0f, 1.0f)));
+    //skyboxGeo->setLocalTransform(rotate(skyboxGeo->getLocalTransform(), glm::radians(180.0f), glm::vec3(0.0f, 0.0f, 1.0f)));
     root->addChild(skyboxGeo);
 }
 
