@@ -49,18 +49,24 @@ ApplicationSolar::ApplicationSolar(std::string const& resource_path)
     , _starObject{}
     , _orbitObject{}
     , _skyboxObject{}
+    , _screenQuadObject{}
     , m_view_transform{glm::translate(glm::fmat4{}, glm::fvec3{0.0f, 0.0f, 20.0f})}
     , m_view_projection{utils::calculate_projection_matrix(initial_aspect_ratio)}
     , _timer{}
-    , _shaderList{ {"planetShader", "simple"}, {"starShader", "vao"}, {"orbitShader", "orbit"}, {"skyboxShader", "skybox"} }
+    , _shaderList{ {"planetShader", "simple"}, {"starShader", "vao"}, {"orbitShader", "orbit"}, {"skyboxShader", "skybox"}, {"quadShader", "quad"} }
     , _isRotating{true}
     , _enableToonShading{false}
+    , _enableHorizontalMirror{ false }
+    , _enableVericallMirror{ false }
+    , _enableBlur{ false }
+    , _enableGrayscale{ false }
 {
     // Initialization order is matter
     initializeGeometry();
     initializeShaderPrograms();
     initializeSceneGraph();
     initializeCamera(m_view_transform, m_view_projection);
+    initializeFrameBuffer(initial_resolution.x, initial_resolution.y);
     SceneGraph::getInstance().printGraph(); // When all initialization are done, print SceneGraph to console
 }
 
@@ -68,6 +74,9 @@ ApplicationSolar::~ApplicationSolar() {
   glDeleteBuffers(1, &_planetObject.vertex_BO);
   glDeleteBuffers(1, &_planetObject.element_BO);
   glDeleteVertexArrays(1, &_planetObject.vertex_AO);
+  glDeleteFramebuffers(1, &_fbo);
+  glDeleteRenderbuffers(1, &_rbo);
+  glDeleteTextures(1, &_screenTexture);
 }
 
 ///////////////////////////// intialisation functions /////////////////////////
@@ -207,6 +216,24 @@ void ApplicationSolar::initializeGeometry() {
     void* cubeAttributeOffsets[] = { 0 };
     GLsizei cubeNumElement = GLsizei(cubeData.size());
     initGeometry(_skyboxObject, nullptr, cubeData, GL_TRIANGLES, 1, cubeAttributeSizes, cubeAttributeTypes, cubeAttributeStrides, cubeAttributeOffsets, cubeNumElement);
+
+    // 5. Initialize quad for offscreen rendering
+    vector<float> screenQuadData = {
+        // positions   // texCoords
+        -1.0f, 1.0f,   0.0f, 1.0f, // v4
+        -1.0f, -1.0f,  0.0f, 0.0f, // v1
+        1.0f, -1.0f,   1.0f, 0.0f, // v2
+        -1.0f,  1.0f,  0.0f, 1.0f, // v4
+        1.0f, -1.0f,   1.0f, 0.0f, // v2
+        1.0f,  1.0f,   1.0f, 1.0f  // v3
+    };
+
+    GLint screenQuadAttributeSizes[] = { 2, 2 }; // position components, texture components
+    GLenum screenQuadAttributeTypes[] = { GL_FLOAT, GL_FLOAT };
+    GLsizei screenQuadAttributeStrides[] = { sizeof(float) * 4, sizeof(float) * 4 }; // total stride for a full set of attributes (position + texture coordinates)
+    void* screenQuadAttributeOffsets[] = { 0, (void*)(sizeof(float) * 2) }; // texture coordinates follow position, hence offset = sizeof(float) * 2
+    GLsizei screenQuadNumElement = GLsizei(screenQuadData.size() / 4); // divide by the number of components (position + texture coordinates)
+    initGeometry(_screenQuadObject, nullptr, screenQuadData, GL_TRIANGLE_STRIP, 2, screenQuadAttributeSizes, screenQuadAttributeTypes, screenQuadAttributeStrides, screenQuadAttributeOffsets, screenQuadNumElement);
 }
 
 // load shader sources
@@ -229,6 +256,11 @@ void ApplicationSolar::initializeShaderPrograms() {
         m_shaders.at(each.first).u_locs["CameraPosition"] = -1;
         m_shaders.at(each.first).u_locs["EnableToonShading"] = -1;
         m_shaders.at(each.first).u_locs["Texture"] = -1;
+        m_shaders.at(each.first).u_locs["ScreenTexture"] = -1;
+        m_shaders.at(each.first).u_locs["EnableHorizontalMirror"] = -1;
+        m_shaders.at(each.first).u_locs["EnableVerticalMirror"] = -1;
+        m_shaders.at(each.first).u_locs["EnableBlur"] = -1;
+        m_shaders.at(each.first).u_locs["EnableGrayscale"] = -1;
     }
 }
 
@@ -365,10 +397,40 @@ void ApplicationSolar::initializeCamera(fmat4 camInitialTransform, fmat4 camInit
     SceneGraph::getInstance().setCamera(camera); // make camera node accessible through SceneGraph object
     SceneGraph::getInstance().getRoot()->addChild(camera); // add camera node to root node
 }
+
+void ApplicationSolar::initializeFrameBuffer(unsigned width, unsigned height) {
+    // Generate and bind framebuffer object (1fbo need color attachment, depth attachment and stencil attachment)
+    glGenFramebuffers(1, &_fbo);
+    glBindFramebuffer(GL_FRAMEBUFFER, _fbo);
+    
+    // Create a color attachment texture
+    glGenTextures(1, &_screenTexture);
+    glBindTexture(GL_TEXTURE_2D, _screenTexture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, _screenTexture, 0); // attach texture to framebuffer
+    
+    // Create a renderbuffer object for depth and stencil attachment 
+    glGenRenderbuffers(1, &_rbo);
+    glBindRenderbuffer(GL_RENDERBUFFER, _rbo);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height); // use a single renderbuffer object for both a depth AND stencil buffer.
+    //glBindRenderbuffer(GL_RENDERBUFFER, 0);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, _rbo); // attach renderbuffer object to depth and stencil attachment of framebuffer
+
+    // Check if it is actually complete now
+    assert(glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0); // Bind back to default framebuffer
+}
 ///////////////////////////// intialisation functions /////////////////////////
 
 ///////////////////////////// render functions /////////////////////////
 void ApplicationSolar::render() const {
+    // 1. Render the scene as usual with the new framebuffer bound as the active framebuffer
+    renderToNewFramebuffer();
+
+    // 2. Traverse scenegraph to render Geometry node
     auto transformAndDrawGeometry = [this](shared_ptr<Node> node) {
         auto geoNode = dynamic_pointer_cast<GeometryNode>(node);
         if (!geoNode) { return; } // Render only GeometryNode
@@ -432,20 +494,50 @@ void ApplicationSolar::render() const {
         }
         // ------------------- End drawing section --------------------------
     };
+    SceneGraph::getInstance().getRoot()->traverse(transformAndDrawGeometry);
 
-    // Traverse scenegraph to render Geometry node
-    auto root = SceneGraph::getInstance().getRoot();
-    root->traverse(transformAndDrawGeometry);
+    // 3. Draw a quad that spans the entire screen with the new framebuffer's color buffer as its texture.
+    offScreenRender();
+}
+
+void ApplicationSolar::renderToNewFramebuffer() const {
+    glBindFramebuffer(GL_FRAMEBUFFER, _fbo);
+    glClearColor(0.1f, 0.1f, 0.1f, 1.0f);               // make sure we clear the framebuffer's content every frame
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // we're not using the stencil buffer now
+    glEnable(GL_DEPTH_TEST);                            // enable depth testing
+}
+
+void ApplicationSolar::offScreenRender() const {
+    // Bind back to default framebuffer
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glClearColor(1.0f, 1.0f, 1.0f, 1.0f);       // Set clear color to white (not really necessary actually, since we won't be able to see behind the quad anyways)
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    // Draw a quad plane with the attached framebuffer color texture
+    glDisable(GL_DEPTH_TEST);                   // Disabling depth testing since we want to make sure the quad always renders in front of everything else
+    glUseProgram(m_shaders.at("quadShader").handle);
+    glBindVertexArray(_screenQuadObject.vertex_AO);
+    glBindTexture(GL_TEXTURE_2D, _screenTexture);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
 }
 
 void ApplicationSolar::uploadView() {
     // vertices are transformed in camera space, so camera transform must be inverted
     fmat4 viewMatrix = glm::inverse(SceneGraph::getInstance().getCamera()->getWorldTransform());
+    
     // upload matrix to gpu
     for (auto& const each : _shaderList) {
         glUseProgram(m_shaders.at(each.first).handle);
         glUniformMatrix4fv(m_shaders.at(each.first).u_locs.at("ViewMatrix"), 1, GL_FALSE, glm::value_ptr(viewMatrix));
     }
+    
+    // For quad.frag
+    glUseProgram(m_shaders.at("quadShader").handle);
+    glUniform1i(m_shaders.at("quadShader").u_locs.at("ScreenTexture"), 0);
+    glUniform1b(m_shaders.at("quadShader").u_locs.at("EnableVerticalMirror"), _enableVericallMirror);
+    glUniform1b(m_shaders.at("quadShader").u_locs.at("EnableHorizontalMirror"), _enableHorizontalMirror);
+    glUniform1b(m_shaders.at("quadShader").u_locs.at("EnableGrayscale"), _enableGrayscale);
+    glUniform1b(m_shaders.at("quadShader").u_locs.at("EnableBlur"), _enableBlur);
 }
 
 void ApplicationSolar::uploadProjection() {
@@ -485,9 +577,19 @@ void ApplicationSolar::keyCallback(int key, int action, int mods) {
     } else if (key == GLFW_KEY_SPACE && (action == GLFW_PRESS || action == GLFW_REPEAT)) {
         _isRotating = !_isRotating;
     } else if (key == GLFW_KEY_1 && (action == GLFW_PRESS || action == GLFW_REPEAT)) {
-        _enableToonShading = true;
-    } else if (key == GLFW_KEY_2 && (action == GLFW_PRESS || action == GLFW_REPEAT)) {
-        _enableToonShading = false;
+        _enableToonShading = !_enableToonShading;
+    } else if (key == GLFW_KEY_7 && (action == GLFW_PRESS || action == GLFW_REPEAT)) {
+         _enableGrayscale = !_enableGrayscale;
+         uploadView();
+    } else if (key == GLFW_KEY_8 && (action == GLFW_PRESS || action == GLFW_REPEAT)) {
+         _enableHorizontalMirror = !_enableHorizontalMirror;
+         uploadView();
+    } else if (key == GLFW_KEY_9 && (action == GLFW_PRESS || action == GLFW_REPEAT)) {
+        _enableVericallMirror = !_enableVericallMirror;
+        uploadView();
+    } else if (key == GLFW_KEY_0 && (action == GLFW_PRESS || action == GLFW_REPEAT)) {
+        _enableBlur = !_enableBlur;
+        uploadView();
     }
 }
 
@@ -506,10 +608,9 @@ void ApplicationSolar::mouseCallback(double pos_x, double pos_y) {
 
 //handle resizing
 void ApplicationSolar::resizeCallback(unsigned width, unsigned height) {
-  // recalculate projection matrix for new aspect ration
-  SceneGraph::getInstance().getCamera()->setProjectionMatrix(utils::calculate_projection_matrix(float(width) / float(height)));
-  // upload new projection matrix
-  uploadProjection();
+  SceneGraph::getInstance().getCamera()->setProjectionMatrix(utils::calculate_projection_matrix(float(width) / float(height))); // recalculate projection matrix for new aspect ration
+  uploadProjection(); // upload new projection matrix
+  initializeFrameBuffer(width, height); // Re-size window impact frame buffer !!
 }
 
 ///////////////////////////// exe entry point /////////////////////////////
