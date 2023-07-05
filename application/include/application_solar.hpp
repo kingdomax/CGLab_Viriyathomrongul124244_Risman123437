@@ -32,8 +32,8 @@ class ApplicationSolar : public Application {
 		// setup camera node
 		void initializeCamera(glm::fmat4 camInitialTransform, glm::fmat4 camInitialProjection);
 		void initializeFrameBuffer(unsigned width, unsigned height);
-		void renderToNewFramebuffer() const;
 		void offScreenRender() const;
+		void renderScreenTextureToQuadObject() const;
 		// timer class
 		mutable Timer _timer;
 		// key=shader name, value=file name

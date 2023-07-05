@@ -416,7 +416,6 @@ void ApplicationSolar::initializeFrameBuffer(unsigned width, unsigned height) {
     glGenRenderbuffers(1, &_rbo);
     glBindRenderbuffer(GL_RENDERBUFFER, _rbo);
     glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height); // use a single renderbuffer object for both a depth AND stencil buffer.
-    //glBindRenderbuffer(GL_RENDERBUFFER, 0);
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, _rbo); // attach renderbuffer object to depth and stencil attachment of framebuffer
 
     // Check if it is actually complete now
@@ -427,8 +426,8 @@ void ApplicationSolar::initializeFrameBuffer(unsigned width, unsigned height) {
 
 ///////////////////////////// render functions /////////////////////////
 void ApplicationSolar::render() const {
-    // 1. Render the scene as usual with the new framebuffer bound as the active framebuffer
-    renderToNewFramebuffer();
+    // 1. Render the scene as usual to our new framebuffer
+    offScreenRender();
 
     // 2. Traverse scenegraph to render Geometry node
     auto transformAndDrawGeometry = [this](shared_ptr<Node> node) {
@@ -497,17 +496,17 @@ void ApplicationSolar::render() const {
     SceneGraph::getInstance().getRoot()->traverse(transformAndDrawGeometry);
 
     // 3. Draw a quad that spans the entire screen with the new framebuffer's color buffer as its texture.
-    offScreenRender();
+    renderScreenTextureToQuadObject();
 }
 
-void ApplicationSolar::renderToNewFramebuffer() const {
+void ApplicationSolar::offScreenRender() const {
     glBindFramebuffer(GL_FRAMEBUFFER, _fbo);
     glClearColor(0.1f, 0.1f, 0.1f, 1.0f);               // make sure we clear the framebuffer's content every frame
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // we're not using the stencil buffer now
     glEnable(GL_DEPTH_TEST);                            // enable depth testing
 }
 
-void ApplicationSolar::offScreenRender() const {
+void ApplicationSolar::renderScreenTextureToQuadObject() const {
     // Bind back to default framebuffer
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glClearColor(1.0f, 1.0f, 1.0f, 1.0f);       // Set clear color to white (not really necessary actually, since we won't be able to see behind the quad anyways)
