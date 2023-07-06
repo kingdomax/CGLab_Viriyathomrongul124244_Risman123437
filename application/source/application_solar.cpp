@@ -122,7 +122,7 @@ void ApplicationSolar::initializeGeometry() {
     };
 
     // 1. Initialize planet geometry from loaded model
-    model planetModel = model_loader::obj(m_resource_path + "models/sphere.obj", model::NORMAL);
+    model planetModel = model_loader::obj(m_resource_path + "models/sphere.obj", model::NORMAL | model::TEXCOORD);
     GLint attributeSizes[] = { model::POSITION.components, model::NORMAL.components, model::TEXCOORD.components };
     GLenum attributeTypes[] = { model::POSITION.type, model::NORMAL.type, model::TEXCOORD.type };
     GLsizei attributeStrides[] = { planetModel.vertex_bytes, planetModel.vertex_bytes, planetModel.vertex_bytes };
@@ -272,8 +272,8 @@ texture_object ApplicationSolar::initializeTexture(const string& textureFile) {
     glBindTexture(GL_TEXTURE_2D, textureObject.handle);
     
     // Configure wrapping mode and texture filtering mode
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT); // specify wrapping mode for x-axis
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT); // specify wrapping mode for y-axis
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE); // specify wrapping mode for x-axis
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE); // specify wrapping mode for y-axis
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR); // specify filtering method for texture magnification
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR); // specify filtering method for texture minification
     
